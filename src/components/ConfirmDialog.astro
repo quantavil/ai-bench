@@ -1,0 +1,13 @@
+<!-- CONFIRM -->
+<dialog id="confirm-dialog" @close="confirm.open = false" @click.self="confirm.open = false"
+  class="overflow-visible">
+  <div class="glass glass-hi relative w-full max-w-sm rounded-card p-5 mx-auto">
+    <h2 class="font-display font-extrabold text-lg t-strong" x-text="confirm.title"></h2>
+    <p class="mt-2 text-sm t-soft" x-text="confirm.body"></p>
+    <div class="mt-5 flex justify-end gap-2">
+      <button @click="confirm.open = false" class="btn btn-ghost px-4 py-2.5 text-sm">Cancel</button>
+      <button @click="confirm.action(); confirm.open = false" class="btn btn-danger px-4 py-2.5 text-sm"
+        x-text="confirm.cta"></button>
+    </div>
+  </div>
+</dialog>

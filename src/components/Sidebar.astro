@@ -1,0 +1,57 @@
+<!-- DESKTOP SIDEBAR (VS Code Style) -->
+<aside class="hidden sm:flex fixed top-0 left-0 h-full w-16 z-40 bg-[var(--glass-bg)] border-r border-[var(--glass-brd)] flex-col items-center justify-between py-6 shadow-lg select-none">
+  
+  <!-- Top Group: Logo + Navigation Tabs aligned to top -->
+  <div class="flex flex-col items-center gap-6">
+    <!-- Logo Symbol -->
+    <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-accent/10 border border-accent/25 shadow-inner">
+      <span class="font-display font-black text-accent text-lg">B</span>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="flex flex-col gap-3">
+      <!-- Tab: Leaderboard -->
+      <button @click="tab = 'leaderboard'" 
+        class="w-11 h-11 flex items-center justify-center rounded-xl transition-all duration-150 cursor-pointer"
+        :class="tab === 'leaderboard' ? 'bg-accent-active-bg text-accent border border-accent-active-brd shadow-sm' : 'text-[var(--soft)] hover:t-strong hover:bg-[var(--chip-bg)] border border-transparent'"
+        title="Leaderboard" aria-label="Leaderboard Tab">
+        <svg class="w-5 h-5">
+          <use href="#icon-trophy"></use>
+        </svg>
+      </button>
+
+      <!-- Tab: Prompts -->
+      <button @click="tab = 'prompts'" 
+        class="w-11 h-11 flex items-center justify-center rounded-xl transition-all duration-150 cursor-pointer"
+        :class="tab === 'prompts' ? 'bg-accent-active-bg text-accent border border-accent-active-brd shadow-sm' : 'text-[var(--soft)] hover:t-strong hover:bg-[var(--chip-bg)] border border-transparent'"
+        title="Prompts" aria-label="Prompts Tab">
+        <svg class="w-5 h-5">
+          <use href="#icon-document"></use>
+        </svg>
+      </button>
+
+      <!-- Tab: Models -->
+      <button @click="tab = 'models'" 
+        class="w-11 h-11 flex items-center justify-center rounded-xl transition-all duration-150 cursor-pointer"
+        :class="tab === 'models' ? 'bg-accent-active-bg text-accent border border-accent-active-brd shadow-sm' : 'text-[var(--soft)] hover:t-strong hover:bg-[var(--chip-bg)] border border-transparent'"
+        title="Models" aria-label="Models Tab">
+        <svg class="w-5 h-5">
+          <use href="#icon-cpu"></use>
+        </svg>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Bottom: Settings Dialog Trigger -->
+  <div class="flex flex-col items-center">
+    <button @click="tab = 'settings'" 
+      class="w-11 h-11 flex items-center justify-center rounded-xl transition-all duration-150 cursor-pointer"
+      :class="tab === 'settings' ? 'bg-accent-active-bg text-accent border border-accent-active-brd shadow-sm' : 'text-[var(--soft)] hover:t-strong hover:bg-[var(--chip-bg)] border border-transparent'"
+      title="Settings" aria-label="Settings Tab">
+      <svg class="w-5 h-5">
+        <use href="#icon-settings"></use>
+      </svg>
+    </button>
+  </div>
+
+</aside>

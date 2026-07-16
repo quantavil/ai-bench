@@ -1,0 +1,235 @@
+---
+import SelectDropdown from './SelectDropdown.astro';
+---
+<!-- PROMPTS -->
+<section x-show="!loading && data.models.length > 0 && tab === 'prompts'" class="mt-5">
+
+  <!-- Coverage matrix -->
+  <div x-show="showMatrix && filteredPrompts.length > 0" class="mb-6 glass rounded-card overflow-hidden">
+    <div class="overflow-x-auto scroll-slim">
+      <table class="min-w-full text-sm border-collapse">
+        <thead>
+          <tr>
+            <th
+              class="sticky left-0 z-10 text-left font-mono text-[11px] uppercase tracking-wide t-soft px-3 py-3 min-w-[120px] max-w-[140px] sm:min-w-[200px] sm:max-w-[280px]"
+              style="background:var(--sticky-bg);border-right:1px solid var(--hair)">Prompt</th>
+            <template x-for="m in data.models" :key="m.id">
+              <th class="px-2 py-3 text-center align-bottom min-w-[80px] max-w-[80px]">
+                <span class="inline-block w-2.5 h-2.5 rounded-full"
+                  :style="'background:'+providerColor(m.provider)" :title="m.name"></span>
+                <span class="block mt-1 text-[11px] font-medium t-soft truncate max-w-[80px]" x-text="m.name"></span>
+              </th>
+            </template>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="p in filteredPrompts" :key="p.id">
+            <tr class="border-t" style="border-color:var(--hair)">
+              <td
+                class="sticky left-0 z-10 px-3 py-2 align-middle min-w-[120px] max-w-[140px] sm:min-w-[200px] sm:max-w-[280px]"
+                style="background:var(--sticky-bg);border-right:1px solid var(--hair)">
+                <span class="block truncate t-strong" x-text="p.text" :title="p.text"></span>
+              </td>
+              <template x-for="m in data.models" :key="m.id">
+                <td class="px-2 py-2 text-center min-w-[80px] max-w-[80px]">
+                  <template x-if="p.runsMap[m.id]">
+                    <button @click="openEditRun(p.id, p.runsMap[m.id])"
+                      class="inline-flex items-center justify-center min-w-[36px] rounded-lg px-1.5 py-1 font-mono text-xs font-bold tabular"
+                      :style="matrixCellStyle(p.runsMap[m.id].score)"
+                      :title="m.name + ' · ' + fmt1(p.runsMap[m.id].score)"
+                      x-text="Math.round(p.runsMap[m.id].score)"></button>
+                  </template>
+                  <template x-if="!p.runsMap[m.id]">
+                    <button @click="openAddRun(p.id, m.id)" aria-label="Log run"
+                      class="inline-flex items-center justify-center min-w-[36px] rounded-lg px-1.5 py-1 chip hover:t-strong">+</button>
+                  </template>
+                </td>
+              </template>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Inline Add/Edit Prompt (elevated so its dropdown clears the cards below) -->
+  <div x-show="inlinePrompt.open" class="mb-4 form-transition relative z-30">
+    <form @submit.prevent="saveInlinePrompt()" class="glass glass-hi rounded-card p-4 dashed-accent dashed-accent-bg">
+      <div class="space-y-3">
+        <p class="text-xs font-semibold t-strong" x-text="inlinePrompt.id ? 'Edit Prompt' : 'Add Prompt'"></p>
+        <textarea id="inline-p-text" x-ref="inlinePromptText" x-model="inlinePrompt.text" rows="3"
+          placeholder="Write your prompt..." class="field w-full"></textarea>
+        <div class="flex items-center gap-2">
+          <div class="relative flex-1">
+            <SelectDropdown
+              id="inline-p-cat-btn"
+              placeholder="Select category"
+              valueModel="inlinePrompt.category"
+              optionsList="CATEGORIES"
+            />
+          </div>
+          <button type="button" @click="inlinePrompt.open = false" class="btn btn-ghost px-3 py-2 text-sm shrink-0" aria-label="Cancel">
+            <svg class="w-4 h-4 shrink-0"><use href="#icon-close"></use></svg>
+          </button>
+          <button type="submit" :disabled="saving" class="btn btn-secondary px-4 py-2 text-sm shrink-0">
+            <svg class="w-4 h-4 shrink-0" x-show="!saving"><use href="#icon-check"></use></svg>
+            <span x-text="saving ? 'Saving...' : 'Save'"></span>
+          </button>
+        </div>
+        <p x-show="inlinePrompt.error" x-text="inlinePrompt.error" class="text-sm font-medium text-danger mt-1"></p>
+      </div>
+    </form>
+  </div>
+
+  <template x-if="filteredPrompts.length === 0 && !inlinePrompt.open">
+    <div class="glass rounded-card p-8 text-center">
+      <p class="text-sm t-soft">No prompts here yet. Add one with <span class="font-semibold t-strong">+ Prompt</span>.</p>
+    </div>
+  </template>
+
+  <div class="space-y-3">
+    <template x-for="p in filteredPrompts" :key="p.id">
+      <div class="glass rounded-card p-4 sm:p-5 prompt-card relative" :class="expandedPrompts[p.id] ? 'z-30' : 'z-10'">
+        <div class="flex items-center justify-between gap-3 mb-2.5">
+          <button @click="togglePrompt(p.id)" class="grow text-left min-w-0 flex items-center gap-2 flex-wrap rounded-lg">
+            <span class="rounded-md px-2 py-0.5 text-[11px] font-mono uppercase tracking-wide font-semibold text-accent"
+              style="background:color-mix(in srgb,var(--color-accent) 14%,transparent)" x-text="p.category"></span>
+            <template x-if="promptAvg(p) !== null">
+              <span class="font-mono text-xs t-soft tabular">adj <span class="font-bold t-strong" x-text="fmt1(promptAvg(p))"></span></span>
+            </template>
+            <span class="font-mono text-xs t-soft tabular"><span x-text="coverage(p).done"></span>/<span x-text="coverage(p).total"></span> models</span>
+          </button>
+          <div class="flex items-center gap-0.5 shrink-0">
+            <button @click.stop="copyToClipboard(p.text, 'Prompt')" aria-label="Copy prompt text" class="touch-target rounded-lg p-2 t-soft hover:t-strong">
+              <svg class="w-4 h-4"><use href="#icon-copy"></use></svg></button>
+            <button @click="openEditPrompt(p)" aria-label="Edit prompt" class="touch-target rounded-lg p-2 t-soft hover:t-strong">
+              <svg class="w-4 h-4"><use href="#icon-edit"></use></svg></button>
+            <button @click="confirmDeletePrompt(p)" aria-label="Delete prompt" class="touch-target rounded-lg p-2 text-danger hover:opacity-80">
+              <svg class="w-4 h-4"><use href="#icon-delete"></use></svg></button>
+          </div>
+        </div>
+        <div class="w-full text-left block cursor-pointer select-none mt-2 collapse-line" @click="togglePromptText(p.id)" title="Click to toggle prompt details">
+          <p :class="expandedQuestions[p.id] ? 't-strong whitespace-pre-wrap' : 't-strong line-clamp-2'" x-text="p.text"></p>
+        </div>
+
+        <!-- Expanded: runs -->
+        <div x-show="expandedPrompts[p.id]"
+          x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0"
+          x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1"
+          class="mt-3">
+          <div>
+            <template x-if="p.runs.length === 0">
+              <p class="text-sm t-soft pb-2">No runs yet. Log how a model handled this prompt.</p>
+            </template>
+
+            <div class="space-y-2 pb-1">
+              <template x-for="r in sortedRuns(p)" :key="r.id">
+                <div class="glass-soft rounded-2xl p-3">
+                  <div class="flex items-center gap-3">
+                    <span class="shrink-0 w-2.5 h-2.5 rounded-full" :style="'background:'+providerColor(modelProvider(r.modelId))"></span>
+                    <div class="min-w-0 grow">
+                      <p class="font-semibold line-clamp-2 t-strong" x-text="modelName(r.modelId)"></p>
+                      <p class="font-mono text-[11px] t-soft tabular" x-text="fmtDate(r.createdAt)"></p>
+                    </div>
+                    <span class="shrink-0 font-mono text-base font-bold tabular t-strong" x-text="fmt1(r.score)"></span>
+                    <span class="shrink-0 font-mono text-xs t-soft tabular" x-show="r.time > 0" x-text="fmt1(r.time) + 's'"></span>
+                    <div class="flex items-center gap-0.5 shrink-0">
+                      <template x-if="r.answer">
+                        <button @click.stop="copyToClipboard(r.answer, 'Answer')" aria-label="Copy answer" class="touch-target rounded-lg p-1.5 t-soft hover:t-strong">
+                          <svg class="w-3.5 h-3.5"><use href="#icon-copy"></use></svg></button>
+                      </template>
+                      <button @click="openEditRun(p.id, r)" aria-label="Edit run" class="touch-target rounded-lg p-1.5 t-soft hover:t-strong">
+                        <svg class="w-3.5 h-3.5"><use href="#icon-edit"></use></svg></button>
+                      <button @click="confirmDeleteRun(p.id, r)" aria-label="Delete run" class="touch-target rounded-lg p-1.5 text-danger hover:opacity-80">
+                        <svg class="w-3.5 h-3.5"><use href="#icon-delete"></use></svg></button>
+                    </div>
+                  </div>
+                  <template x-if="r.answer">
+                    <div class="mt-2 cursor-pointer select-none collapse-line" @click="shownAnswers[r.id] = !shownAnswers[r.id]" title="Click to toggle full answer">
+                      <div :class="shownAnswers[r.id] ? 'text-sm t-strong max-w-full overflow-hidden whitespace-pre-wrap' : 'text-sm t-strong max-w-full overflow-hidden whitespace-pre-wrap line-clamp-3'" x-text="r.answer"></div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+
+            <!-- Inline Add/Edit Run -->
+            <div x-show="inlineRun.open && inlineRun.promptId === p.id" class="mt-3 form-transition">
+              <form @submit.prevent="saveInlineRun()" class="glass glass-hi rounded-card p-4 dashed-accent dashed-accent-bg">
+                <div class="space-y-3">
+                  <div class="flex items-center justify-between gap-3">
+                    <p class="text-xs font-semibold t-strong" x-text="inlineRun.mode === 'add' ? 'Log run' : 'Edit run'"></p>
+                    <div class="flex items-center gap-1.5" x-show="inlineRun.mode !== 'edit'">
+                      <span class="text-[10px] t-soft">Score:</span>
+                      <button type="button" @click="inlineRun.score = 100" class="border border-dotted border-[var(--glass-brd)] px-2 py-0.5 rounded-full text-[10px] font-mono t-soft hover:t-strong hover:border-[color-mix(in_srgb,var(--strong)_50%,transparent)] transition-all">100</button>
+                      <button type="button" @click="inlineRun.score = 0" class="border border-dotted border-[var(--glass-brd)] px-2 py-0.5 rounded-full text-[10px] font-mono t-soft hover:t-strong hover:border-[color-mix(in_srgb,var(--strong)_50%,transparent)] transition-all">0</button>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label :for="'r-model-'+p.id" class="block text-xs font-semibold t-soft">Model</label>
+                      <div class="relative w-full mt-1.5">
+                        <SelectDropdown
+                          idExpr="'r-model-'+p.id"
+                          placeholder="Select a model"
+                          valueModel="inlineRun.modelId"
+                          optionsList="availableModels(p.id)"
+                          disabledExpr="inlineRun.mode === 'edit'"
+                          labelExpr="item.name"
+                          valueExpr="item.id"
+                          colorExpr="providerColor(item.provider)"
+                          rightExpr="item.provider"
+                        />
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label :for="'r-score-'+p.id" class="block text-xs font-semibold t-soft">Score <span class="font-normal">(0-100)</span></label>
+                        <input :id="'r-score-'+p.id" type="number" inputmode="numeric" min="0" max="100" step="1" x-model="inlineRun.score" class="field mt-1.5 font-mono w-full no-spinner">
+                      </div>
+                      <div>
+                        <label :for="'r-time-'+p.id" class="block text-xs font-semibold t-soft">Time <span class="font-normal">(optional)</span></label>
+                        <input :id="'r-time-'+p.id" type="text" placeholder="e.g. 3m 20s" x-model="inlineRun.time" class="field mt-1.5 font-mono w-full">
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label :for="'r-answer-'+p.id" class="block text-xs font-semibold t-soft">Answer <span class="font-normal">(optional)</span></label>
+                    <textarea :id="'r-answer-'+p.id" x-model="inlineRun.answer" rows="4" placeholder="Paste the model's response." class="field mt-1.5 font-mono text-sm w-full"></textarea>
+                  </div>
+
+                  <p x-show="inlineRun.error" x-text="inlineRun.error" class="text-sm font-medium text-danger mt-1"></p>
+
+                  <div class="flex items-center justify-end gap-2 pt-1">
+                    <button type="button" @click="inlineRun.open = false" class="btn btn-ghost px-3 py-2 text-sm shrink-0" aria-label="Cancel">
+                      <svg class="w-4 h-4 shrink-0"><use href="#icon-close"></use></svg></button>
+                    <button type="submit" :disabled="saving" class="btn btn-secondary px-4 py-2 text-sm shrink-0">
+                      <svg class="w-4 h-4 shrink-0" x-show="!saving"><use href="#icon-check"></use></svg>
+                      <span x-text="saving ? 'Saving...' : 'Save'"></span></button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div x-show="(!inlineRun.open || inlineRun.promptId !== p.id) && availableModels(p.id).length > 0"
+              class="flex items-center justify-between mt-3 flex-wrap gap-2">
+              <button @click="openAddRun(p.id)" class="btn btn-secondary px-3.5 py-2 text-sm"><span>+ Log run</span></button>
+              
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <template x-for="m in suggestedModels(p.id)" :key="m.id">
+                  <button type="button" @click="openAddRun(p.id, m.id)"
+                    class="btn btn-secondary border-dotted px-3.5 py-2 text-sm flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5 text-accent shrink-0"><use href="#icon-plus"></use></svg>
+                    <span class="truncate max-w-[95px] sm:max-w-[180px]" x-text="m.name"></span>
+                  </button>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</section>

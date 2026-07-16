@@ -1,0 +1,100 @@
+---
+interface Props {
+  id?: string;
+  idExpr?: string;
+  placeholder?: string;
+  valueModel: string;
+  optionsList: string;
+  disabledExpr?: string;
+  labelExpr?: string;
+  valueExpr?: string;
+  colorExpr?: string;
+  rightExpr?: string;
+}
+
+const {
+  id,
+  idExpr,
+  placeholder = "Select an option",
+  valueModel,
+  optionsList,
+  disabledExpr = "false",
+  labelExpr = "item",
+  valueExpr = "item",
+  colorExpr,
+  rightExpr
+} = Astro.props;
+---
+
+<div class="relative w-full"
+     x-data={`{
+       open: false,
+       activeIdx: 0,
+       get items() { return ${optionsList}; },
+       selectItem(idx) {
+         const item = this.items[idx];
+         ${valueModel} = ${valueExpr.replace(/\bitem\b/g, 'item')};
+       },
+       get selectedLabel() {
+         const found = this.items.find(item => ${valueExpr.replace(/\bitem\b/g, 'item')} === ${valueModel});
+         return found ? ${labelExpr.replace(/\bitem\b/g, 'found')} : '${placeholder}';
+       }
+     }`}
+     x-init={`$watch('open', val => { if(val) { const i = items.findIndex(item => ${valueExpr.replace(/\bitem\b/g, 'item')} === ${valueModel}); activeIdx = i >= 0 ? i : 0; } })`}
+     @click.outside="open = false">
+  
+  <button type="button" id={id} :id={idExpr}
+    @click={`if (!(${disabledExpr})) open = !open`}
+    @keydown={`if (!(${disabledExpr})) handleDropdownKey($event, $data, items, idx => selectItem(idx))`}
+    aria-haspopup="listbox"
+    :aria-expanded="open"
+    class="field flex items-center justify-between w-full text-left bg-transparent"
+    :class={`(${disabledExpr}) ? 'opacity-50 cursor-not-allowed' : ''`}
+    :disabled={disabledExpr}>
+    <span x-text="selectedLabel" class="truncate"></span>
+    <svg class="w-4 h-4 t-soft pointer-events-none shrink-0 transition-transform duration-150" :class="open ? 'rotate-180' : ''" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+  </button>
+
+  <ul x-show="open"
+      style="display:none"
+      x-transition:enter="transition ease-out duration-100"
+      x-transition:enter-start="opacity-0 scale-95"
+      x-transition:enter-end="opacity-100 scale-100"
+      x-transition:leave="transition ease-in duration-75"
+      x-transition:leave-start="opacity-100 scale-100"
+      x-transition:leave-end="opacity-0 scale-95"
+      role="listbox"
+      class="absolute left-0 right-0 z-40 mt-1.5 max-h-60 overflow-y-auto scroll-slim py-1 px-1.5 dropdown-panel rounded-xl shadow-xl flex flex-col border border-[var(--glass-brd)]">
+    <template x-for="(item, idx) in items" :key={valueExpr}>
+      <button type="button" @click="selectItem(idx); open = false"
+          @mouseenter="activeIdx = idx"
+          role="option"
+          :aria-selected={`(${valueModel}) === (${valueExpr})`}
+          :data-dropdown-active="activeIdx === idx ? '' : null"
+          class="w-full text-left px-3 py-2 text-xs cursor-pointer flex items-center justify-between rounded-lg select-none"
+          :class={`{
+            'bg-[color-mix(in_srgb,var(--strong)_6%,transparent)]': activeIdx === idx,
+            'text-accent font-bold': (${valueModel}) === (${valueExpr}),
+            't-strong': (${valueModel}) !== (${valueExpr})
+          }`}>
+        <div class="flex items-center gap-2.5 min-w-0">
+          {colorExpr && (
+            <span class="w-2.5 h-2.5 rounded-full shrink-0" :style={`'background:' + (${colorExpr})`}></span>
+          )}
+          <span x-text={labelExpr} class="truncate font-semibold"></span>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          {rightExpr && (
+            <span class="text-[10px] font-mono t-soft uppercase" x-text={rightExpr}></span>
+          )}
+          <template x-if={`(${valueModel}) === (${valueExpr})`}>
+            <svg class="w-3.5 h-3.5 text-accent" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
+            </svg>
+          </template>
+        </div>
+      </button>
+    </template>
+  </ul>
+</div>

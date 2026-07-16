@@ -1,0 +1,21 @@
+<!-- HEADER -->
+<header class="pt-4 sm:pt-6">
+  <div class="glass rounded-card px-4 sm:px-6 py-3 flex flex-row items-center justify-between gap-4 flex-wrap">
+    <!-- Logo Title -->
+    <h1 @click="tab = 'leaderboard'" class="font-display font-black leading-none tracking-tight t-strong text-xl sm:text-2xl cursor-pointer select-none">
+      THE<span class="text-accent"> BENCH</span>
+    </h1>
+
+    <!-- Stats Badges -->
+    <template x-if="data.models.length > 0">
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="chip rounded-full px-2.5 py-1 font-mono text-[10px] sm:text-[11px] tabular"><b
+            class="t-strong font-semibold" x-text="data.models.length"></b> models</span>
+        <span class="chip rounded-full px-2.5 py-1 font-mono text-[10px] sm:text-[11px] tabular"><b
+            class="t-strong font-semibold" x-text="data.prompts.length"></b> prompts</span>
+        <span class="chip rounded-full px-2.5 py-1 font-mono text-[10px] sm:text-[11px] tabular"><b
+            class="t-strong font-semibold" x-text="totalRuns"></b> runs</span>
+      </div>
+    </template>
+  </div>
+</header>

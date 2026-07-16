@@ -1,0 +1,17 @@
+# Local-only Cloudflare Pages secrets. NEVER commit.
+.dev.vars
+.dev.vars.*
+
+# Wrangler / Cloudflare
+.wrangler/
+.mf/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
+node_modules/
+dist/
+.astro/
+
+

@@ -1,0 +1,164 @@
+---
+import '../styles/index.css';
+import Icons from '../components/Icons.astro';
+import Header from '../components/Header.astro';
+import Sidebar from '../components/Sidebar.astro';
+import TabLeaderboard from '../components/TabLeaderboard.astro';
+import TabPrompts from '../components/TabPrompts.astro';
+import TabModels from '../components/TabModels.astro';
+import ConfirmDialog from '../components/ConfirmDialog.astro';
+import TabSettings from '../components/TabSettings.astro';
+import MobileNav from '../components/MobileNav.astro';
+import Toast from '../components/Toast.astro';
+---
+
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#e9edf7">
+  <title>The Bench · personal AI model proving grounds</title>
+
+  <!-- Apply saved theme before first paint. Light is the default. -->
+  <script is:inline>
+    if (localStorage.getItem('bench-theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.querySelector('meta[name="theme-color"]').setAttribute('content', '#060814');
+    }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+</head>
+
+<body class="h-full font-sans antialiased">
+
+  <Icons />
+
+  <div class="aurora" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <noscript>
+    <div style="max-width:32rem;margin:4rem auto;padding:0 1.5rem;font-family:sans-serif">
+      <h1 style="font-size:2rem;font-weight:800">The Bench</h1>
+      <p style="margin-top:.5rem;color:#5a6480">This dashboard needs JavaScript enabled to run.</p>
+    </div>
+  </noscript>
+
+  <div id="boot-error" style="display:none;max-width:34rem;margin:4rem auto;padding:0 1.5rem;font-family:sans-serif">
+    <h1 style="font-size:2rem;font-weight:800">The Bench</h1>
+    <p style="margin-top:.5rem;color:#5a6480">The app could not load. This usually means the page was opened directly
+      from disk (file://), or a CDN import was blocked. Serve it over http, for example
+      <code>bunx wrangler pages dev dist --kv BENCH_KV</code>, then reload.</p>
+  </div>
+  <script is:inline>
+    setTimeout(function () {
+      if (!window.__benchBooted) {
+        var el = document.getElementById('boot-error');
+        if (el) el.style.display = 'block';
+        var s = document.createElement('style');
+        s.textContent = '[x-cloak]{display:none!important}';
+        document.head.appendChild(s);
+      }
+    }, 3500);
+  </script>
+  <div x-data="bench" x-cloak class="min-h-full">
+    <Sidebar />
+    <div class="mx-auto max-w-6xl px-4 sm:px-6 pb-36 sm:pl-20">
+
+      <Header />
+
+      <!-- Loading skeleton -->
+      <div x-show="loading" class="mt-8 space-y-3" aria-hidden="true">
+        <template x-for="i in 5" :key="i">
+          <div class="h-16 rounded-2xl glass-soft animate-pulse"></div>
+        </template>
+      </div>
+
+      <!-- Empty state -->
+      <div x-show="!loading && data.models.length === 0 && tab !== 'models'" class="mt-14 flex justify-center rise">
+        <div class="flex flex-col items-center justify-center p-12">
+          <button @click="tab = 'models'; syncModels()"
+            class="w-36 h-36 flex flex-col items-center justify-center rounded-card bg-transparent hover:scale-[0.98] transition-all duration-200 cursor-pointer group dashed-accent"
+            title="Sync Models" aria-label="Sync Models">
+            <svg class="w-8 h-8 text-accent group-hover:scale-110 transition-transform duration-200">
+              <use href="#icon-sync"></use>
+            </svg>
+            <span class="text-xs font-bold t-soft mt-2 group-hover:text-accent transition-colors">Sync Models</span>
+          </button>
+        </div>
+      </div>
+
+      <div x-show="!loading && data.models.length > 0 && tab !== 'settings'"
+        class="mt-5 space-y-3 sm:space-y-0 sm:flex sm:flex-row sm:items-center justify-between gap-3">
+        <div x-show="tab === 'leaderboard' || tab === 'prompts'" class="overflow-x-auto no-scrollbar -mx-4 sm:mx-0">
+          <div class="flex items-center gap-1.5 py-0.5 px-4 sm:px-0 min-w-max">
+            <button @click="category = 'all'" class="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition"
+              :class="category === 'all' ? 'chip-active' : 'chip hover:t-strong'">All</button>
+            <template x-for="c in activeCategories" :key="c">
+              <button @click="category = c" class="shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition"
+                :class="category === c ? 'chip-active' : 'chip hover:t-strong'" x-text="c"></button>
+            </template>
+          </div>
+        </div>
+
+        <div x-show="tab === 'prompts'" class="flex items-center gap-2 w-full sm:w-auto justify-end">
+          <button @click="openAddPrompt()" class="btn btn-secondary px-3 py-1.5 text-xs flex items-center gap-1 cursor-pointer" title="Add prompt" aria-label="Add prompt">
+            <svg class="w-3.5 h-3.5 shrink-0">
+              <use href="#icon-plus"></use>
+            </svg>
+            <span>Prompt</span>
+          </button>
+          <button @click="showMatrix = !showMatrix" class="btn p-2 cursor-pointer"
+            :class="showMatrix ? 'btn-secondary' : 'btn-ghost'" title="Toggle coverage grid" aria-label="Toggle coverage grid">
+            <svg class="w-4 h-4 shrink-0">
+              <use href="#icon-matrix"></use>
+            </svg>
+          </button>
+          <search class="contents">
+            <input type="search" x-model="search" aria-label="Search prompts" placeholder="Search prompts&hellip;"
+              class="rounded-full px-3.5 py-1.5 text-xs bg-[var(--chip-bg)] border border-[var(--glass-brd-soft)] text-[var(--strong)] placeholder-[var(--soft)] grow sm:grow-0 sm:w-48 transition-all duration-150">
+          </search>
+        </div>
+
+        <div x-show="tab === 'models'" class="flex items-center gap-2 w-full sm:w-auto justify-end ml-auto">
+          <search class="contents">
+            <input type="search" x-model="search" aria-label="Search models" placeholder="Search models&hellip;"
+              class="rounded-full px-3.5 py-1.5 text-xs bg-[var(--chip-bg)] border border-[var(--glass-brd-soft)] text-[var(--strong)] placeholder-[var(--soft)] grow sm:grow-0 sm:w-48 transition-all duration-150">
+          </search>
+        </div>
+      </div>
+
+      <TabLeaderboard />
+      <TabPrompts />
+      <TabModels />
+      <TabSettings />
+    </div>
+
+    <ConfirmDialog />
+    <MobileNav />
+    <Toast />
+
+
+  </div>
+
+  <script>
+    import { bench } from '../store/appStore.js';
+    
+    document.addEventListener('alpine:init', () => {
+      window.Alpine.data('bench', bench);
+    });
+  </script>
+  <script is:inline>
+    window.__benchBooted = true;
+  </script>
+</body>
+
+</html>

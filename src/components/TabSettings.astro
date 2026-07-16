@@ -1,0 +1,98 @@
+<!-- TAB: SETTINGS -->
+<section x-show="!loading && tab === 'settings'" class="mt-5 space-y-4 max-w-2xl mx-auto">
+  <div class="glass rounded-card p-5 sm:p-6">
+    <div class="flex items-center gap-2 pb-3 border-b" style="border-color: var(--hair)">
+      <svg class="w-5 h-5 text-accent">
+        <use href="#icon-settings"></use>
+      </svg>
+      <h2 class="font-display font-extrabold text-lg t-strong">Settings</h2>
+    </div>
+
+    <div class="mt-4 space-y-4">
+      
+      <!-- Theme Selection with Toggle Switch -->
+      <div class="flex items-center justify-between py-1">
+        <div>
+          <p class="font-semibold text-sm t-strong">Dark Mode</p>
+          <p class="text-[11px] t-soft">Toggle between dark and light themes</p>
+        </div>
+        <button @click="toggleTheme()" class="relative inline-flex h-6 w-11 items-center px-[3px] shrink-0 cursor-pointer rounded-full border transition-colors duration-200 ease-in-out focus:outline-none"
+          :class="dark ? 'bg-accent border-accent' : 'bg-slate-200 border-slate-300 dark:bg-zinc-800 dark:border-zinc-700 shadow-inner'">
+          <span class="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition duration-200 ease-in-out"
+            :class="dark ? 'translate-x-5' : 'translate-x-0'"></span>
+        </button>
+      </div>
+
+      <!-- Artificial Analysis API key -->
+      <div class="pt-4 border-t space-y-3" style="border-color: var(--hair)">
+        <div>
+          <p class="font-semibold text-sm t-strong">Artificial Analysis API Key</p>
+          <p class="text-[11px] t-soft">Stored only in this browser. Required to sync the model list. Get a key from artificialanalysis.ai</p>
+        </div>
+        <input type="password" autocomplete="off" spellcheck="false" x-model="aaKeyDraft"
+          placeholder="aa_…"
+          class="field w-full font-mono text-sm"
+          aria-label="Artificial Analysis API key">
+        <div class="flex flex-wrap gap-2">
+          <button type="button" @click="saveAaApiKey()" class="btn btn-secondary px-3.5 py-1.5 text-xs cursor-pointer">
+            Save key
+          </button>
+          <button type="button" @click="testAaApiKey()" :disabled="testingAaKey"
+            class="btn btn-ghost px-3.5 py-1.5 text-xs flex items-center gap-1.5 cursor-pointer">
+            <svg x-show="testingAaKey" class="animate-spin w-3.5 h-3.5 text-accent" viewBox="0 0 24 24" fill="none">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span x-text="testingAaKey ? 'Testing…' : 'Test key'"></span>
+          </button>
+        </div>
+        <p class="text-[11px] t-soft" x-show="aaApiKey">
+          Key on this device: <span class="font-mono text-accent">saved</span>
+        </p>
+        <p class="text-[11px] text-danger" x-show="!aaApiKey">No key saved — Sync Models will ask you to set one.</p>
+      </div>
+
+      <!-- Sync Registry -->
+      <div class="flex items-center justify-between pt-4 border-t" style="border-color: var(--hair)">
+        <div>
+          <p class="font-semibold text-sm t-strong">Sync Models</p>
+          <p class="text-[11px] t-soft">Last synced: <span class="font-mono text-accent" x-text="data.lastSyncedAt ? fmtDateTime(data.lastSyncedAt) : 'Never'"></span></p>
+        </div>
+        <button @click="syncModels()" :disabled="syncing" class="btn btn-ghost px-3.5 py-1.5 text-xs flex items-center gap-1.5 cursor-pointer">
+          <svg x-show="syncing" class="animate-spin w-3.5 h-3.5 text-accent" viewBox="0 0 24 24" fill="none">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <svg x-show="!syncing" class="w-3.5 h-3.5 text-accent">
+            <use href="#icon-sync"></use>
+          </svg>
+          <span x-text="syncing ? 'Syncing...' : 'Sync Now'"></span>
+        </button>
+      </div>
+
+      <!-- Backup JSON data -->
+      <div class="pt-4 border-t" style="border-color: var(--hair)">
+        <div class="mb-3">
+          <p class="font-semibold text-sm t-strong">Data Backup</p>
+          <p class="text-[11px] t-soft">Export local data or restore from a JSON backup</p>
+        </div>
+        <div class="grid grid-cols-2 gap-2.5">
+          <button @click="exportJson()" class="btn btn-secondary py-2 text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+            <svg class="w-3.5 h-3.5">
+              <use href="#icon-export"></use>
+            </svg>
+            <span>Export JSON</span>
+          </button>
+          <button @click="$refs.settingsTabImportFile.click()" class="btn btn-ghost py-2 text-xs flex items-center justify-center gap-1.5 cursor-pointer">
+            <svg class="w-3.5 h-3.5">
+              <use href="#icon-import"></use>
+            </svg>
+            <span>Import JSON</span>
+          </button>
+          <input type="file" x-ref="settingsTabImportFile" accept="application/json,.json" class="hidden"
+            @change="handleImport($event)">
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

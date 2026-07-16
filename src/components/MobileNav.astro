@@ -1,0 +1,30 @@
+<div x-show="!loading && !isKeyboardOpen" class="sm:hidden fixed bottom-2 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-sm hide-on-keyboard">
+  <!-- Cleaned up mobile nav with global classes -->
+  <div
+    class="glass rounded-card p-1.5 flex items-center justify-around shadow-xl mb-[env(safe-area-inset-bottom)]">
+    <button @click="tab = 'leaderboard'" class="nav-btn" :class="tab === 'leaderboard' ? 'nav-btn-active' : ''"
+      title="Leaderboard" aria-label="Leaderboard tab">
+      <svg class="w-5 h-5">
+        <use href="#icon-trophy"></use>
+      </svg>
+    </button>
+    <button @click="tab = 'prompts'" class="nav-btn" :class="tab === 'prompts' ? 'nav-btn-active' : ''"
+      title="Prompts" aria-label="Prompts tab">
+      <svg class="w-5 h-5">
+        <use href="#icon-document"></use>
+      </svg>
+    </button>
+    <button @click="tab = 'models'" class="nav-btn" :class="tab === 'models' ? 'nav-btn-active' : ''"
+      title="Models" aria-label="Models tab">
+      <svg class="w-5 h-5">
+        <use href="#icon-cpu"></use>
+      </svg>
+    </button>
+    <button @click="tab = 'settings'" class="nav-btn" :class="tab === 'settings' ? 'nav-btn-active' : ''"
+      title="Settings" aria-label="Settings tab">
+      <svg class="w-5 h-5">
+        <use href="#icon-settings"></use>
+      </svg>
+    </button>
+  </div>
+</div>
