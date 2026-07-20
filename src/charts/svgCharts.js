@@ -124,17 +124,20 @@ export function renderScatterChart(rows) {
     const shadowStyle = isLowN ? '' : `; box-shadow: 0 0 8px ${withAlpha(color, 0.6)}`;
 
     const isTop = y > 75;
-    const tooltipClass = isTop ? 'top-full mt-2' : 'bottom-full mb-2';
+    const tooltipVClass = isTop ? 'top-full mt-1.5' : 'bottom-full mb-1.5';
+    const isLeft = x < 15;
+    const isRight = x > 85;
+    const tooltipHClass = isLeft ? 'left-0 translate-x-0' : (isRight ? 'right-0 left-auto translate-x-0' : 'left-1/2 -translate-x-1/2');
 
     return `
-      <div class="absolute w-3.5 h-3.5 rounded-full -translate-x-1/2 translate-y-1/2 transition-transform duration-200 hover:scale-150 focus:scale-150 cursor-default z-10 group focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+      <div class="absolute w-3.5 h-3.5 rounded-full -translate-x-1/2 translate-y-1/2 transition-transform duration-200 hover:scale-150 focus:scale-150 cursor-default z-10 hover:z-50 focus:z-50 group focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
            tabindex="0"
            style="left:${x}%; bottom:${y}%; ${bgStyle}; ${borderStyle}${shadowStyle}"
            role="img" aria-label="${ariaLabel}">
-        <div class="hidden group-hover:block group-focus:block absolute ${tooltipClass} left-1/2 -translate-x-1/2 px-2.5 py-1.5 rounded-lg text-xs font-mono whitespace-nowrap z-30 pointer-events-none shadow-xl"
+        <div class="hidden group-hover:block group-focus:block absolute ${tooltipVClass} ${tooltipHClass} px-2 py-1 rounded-md text-[10px] font-mono whitespace-nowrap z-50 pointer-events-none shadow-xl"
              style="background:var(--glass-bg-hi);border:1px solid var(--glass-brd);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--strong)">
-          <span class="font-semibold font-sans block mb-0.5">${esc(r.model.name)}${isLowN ? ' <span class="text-[9px] px-1 py-0.2 rounded font-mono uppercase bg-danger/20 text-danger inline-block ml-1">low n</span>' : ''}</span>
-          ${fmt1(r.adjusted)} adj · ${fmt1(r.avgTime)}s
+          <span class="font-bold font-sans block text-[10px] leading-tight">${esc(r.model.name)}${isLowN ? ' <span class="text-[8px] px-1 rounded font-mono uppercase bg-danger/20 text-danger inline-block ml-0.5">low n</span>' : ''}</span>
+          <span class="text-[9px] t-soft block leading-tight mt-0.5">${fmt1(r.adjusted)} adj · ${fmt1(r.avgTime)}s</span>
         </div>
       </div>`;
   }).join('');
@@ -318,21 +321,24 @@ export function renderIntelligenceCostChart(models) {
     const sizeClass = isOnFrontier ? 'w-4 h-4' : 'w-3.5 h-3.5';
 
     const isTop = y > 75;
-    const tooltipClass = isTop ? 'top-full mt-2' : 'bottom-full mb-2';
+    const tooltipVClass = isTop ? 'top-full mt-1.5' : 'bottom-full mb-1.5';
+    const isLeft = x < 15;
+    const isRight = x > 85;
+    const tooltipHClass = isLeft ? 'left-0 translate-x-0' : (isRight ? 'right-0 left-auto translate-x-0' : 'left-1/2 -translate-x-1/2');
 
     const pricesDetail = (!isUnpriced && m.price1mInput != null && m.price1mOutput != null)
       ? ` · In: $${m.price1mInput} Out: $${m.price1mOutput}`
       : '';
 
     return `
-      <div class="absolute ${sizeClass} rounded-full -translate-x-1/2 translate-y-1/2 transition-transform duration-200 hover:scale-150 focus:scale-150 cursor-default z-10 group focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+      <div class="absolute ${sizeClass} rounded-full -translate-x-1/2 translate-y-1/2 transition-transform duration-200 hover:scale-150 focus:scale-150 cursor-default z-10 hover:z-50 focus:z-50 group focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
            tabindex="0"
            style="left:${x}%; bottom:${y}%; ${bgStyle}; ${borderStyle}${shadowStyle}"
            role="img" aria-label="${ariaLabel}">
-        <div class="hidden group-hover:block group-focus:block absolute ${tooltipClass} left-1/2 -translate-x-1/2 px-2.5 py-1.5 rounded-lg text-xs font-mono whitespace-nowrap z-30 pointer-events-none shadow-xl"
+        <div class="hidden group-hover:block group-focus:block absolute ${tooltipVClass} ${tooltipHClass} px-2 py-1 rounded-md text-[10px] font-mono whitespace-nowrap z-50 pointer-events-none shadow-xl"
              style="background:var(--glass-bg-hi);border:1px solid var(--glass-brd);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--strong)">
-          <span class="font-semibold font-sans block mb-0.5">${esc(m.name)} <span class="font-normal text-[10px] t-soft">(${esc(m.provider)})</span></span>
-          IQ: ${m.intelligence} · ${priceLabel}${pricesDetail}
+          <span class="font-bold font-sans block text-[10px] leading-tight">${esc(m.name)} <span class="font-normal text-[9px] t-soft">(${esc(m.provider)})</span></span>
+          <span class="text-[9px] t-soft block leading-tight mt-0.5">IQ: ${m.intelligence} · ${priceLabel}${pricesDetail}</span>
         </div>
       </div>`;
   }).join('');
