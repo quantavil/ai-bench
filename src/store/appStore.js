@@ -1,11 +1,11 @@
 // The Alpine component. Holds state, wires the pure helpers to the UI, and
 // owns every mutation + persist cycle.
 
-import { CATEGORIES, SORT_MODES, CHART_MODES, UNDO_WINDOW_MS, SHRINKAGE_C } from '../utils/config.js';
+import { CATEGORIES, SORT_MODES, CHART_MODES, MODEL_VIEW_MODES, UNDO_WINDOW_MS, SHRINKAGE_C } from '../utils/config.js';
 import { providerColor } from '../utils/providers.js';
 import { loadData, saveData, syncModels as apiSyncModels, testAaKey as apiTestAaKey } from '../api/client.js';
 import { aggregate, rank, categoriesInUse, totalRuns } from '../utils/ranking.js';
-import { renderBarChart, renderScatterChart } from '../charts/svgCharts.js';
+import { renderBarChart, renderScatterChart, renderIntelligenceCostChart } from '../charts/svgCharts.js';
 import { uid, fmt1, fmtDate, fmtDateTime, fmtDateTimeCompact } from '../utils/formatters.js';
 
 const AA_KEY_STORAGE = 'bench-aa-api-key';
@@ -44,6 +44,7 @@ export function bench() {
     CATEGORIES,
     SORT_MODES,
     CHART_MODES,
+    MODEL_VIEW_MODES,
 
     // data + meta
     data: { version: 0, models: [], prompts: [], lastSyncedAt: null },
@@ -67,6 +68,7 @@ export function bench() {
     category: 'all',
     sortMode: 'adjusted',
     chartMode: 'bar',
+    modelsViewMode: 'list',
     search: '',
     isKeyboardOpen: false,
     expandedPrompts: {},
@@ -306,6 +308,14 @@ export function bench() {
           const intelB = b.model.intelligence !== null ? b.model.intelligence : -1;
           return intelB - intelA;
         });
+    },
+
+    get modelsPlotHtml() {
+      const q = this.search.trim().toLowerCase();
+      const filtered = this.data.models.filter((m) =>
+        !q || m.name.toLowerCase().includes(q) || m.provider.toLowerCase().includes(q)
+      );
+      return renderIntelligenceCostChart(filtered);
     },
 
     // Standings rows: scored rows only, for the leaderboard.

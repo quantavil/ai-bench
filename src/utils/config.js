@@ -18,6 +18,12 @@ export const SORT_MODES = [
   { id: 'count', label: 'Most tested' },
 ];
 
+// Models tab view modes.
+export const MODEL_VIEW_MODES = [
+  { id: 'list', label: 'List' },
+  { id: 'plot', label: 'Intelligence vs Cost' },
+];
+
 // Leaderboard chart modes.
 export const CHART_MODES = [
   { id: 'bar', label: 'Ranking' },

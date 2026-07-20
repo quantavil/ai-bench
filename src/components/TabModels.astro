@@ -10,62 +10,87 @@
     </div>
   </template>
 
-  <template x-if="data.models.length > 0 && rankedModelsByIntelligence.length === 0">
-    <div class="glass rounded-card p-8 text-center">
-      <p class="text-sm t-soft">No models match your search query.</p>
-    </div>
-  </template>
+  <template x-if="data.models.length > 0">
+    <div>
+      <!-- View toggle + hint -->
+      <div class="flex items-center justify-between gap-3">
+        <div class="seg inline-flex rounded-btn p-1">
+          <template x-for="m in MODEL_VIEW_MODES" :key="m.id">
+            <button @click="modelsViewMode = m.id" class="seg-btn px-3.5 py-1 text-xs font-semibold"
+              :class="modelsViewMode === m.id ? 'seg-btn-on' : 'hover:t-strong'" x-text="m.label"></button>
+          </template>
+        </div>
+        <p class="font-mono text-[11px] t-soft hidden sm:block" x-show="modelsViewMode === 'plot'">Top-left is the sweet spot.</p>
+      </div>
 
-  <div class="space-y-2.5">
-    <template x-for="(row, idx) in rankedModelsByIntelligence" :key="row.model.id">
-      <div class="glass-soft rounded-2xl px-4 py-3 flex items-center justify-between gap-3 min-w-0">
-        <!-- Left: Rank + Model info -->
-        <div class="flex items-center gap-3 min-w-0 grow">
-          <!-- Fancy number label: big, bold, beautiful, colored with provider brand color -->
-          <span class="w-14 shrink-0 text-center font-display text-2xl font-black tracking-tight"
-            :style="`color: ${providerColor(row.model.provider)}; text-shadow: 0 0 10px color-mix(in srgb, ${providerColor(row.model.provider)} 25%, transparent)`"
-            x-text="`#${idx + 1}`"></span>
-          <div class="min-w-0 grow">
-            <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-              <p class="font-bold t-strong text-sm sm:text-base line-clamp-2" x-text="row.model.name"></p>
-              <div class="flex flex-nowrap items-center gap-1.5 shrink-0">
-                <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent-bg text-accent font-mono" x-show="row.model.intelligence !== null" x-text="`IQ: ${row.model.intelligence}`"></span>
-                <template x-if="row.model.price1mInput !== null">
-                  <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-price-in-bg text-price-in font-mono" x-text="`In: $${row.model.price1mInput}`"></span>
-                </template>
-                <template x-if="row.model.price1mOutput !== null">
-                  <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-price-out-bg text-price-out font-mono" x-text="`Out: $${row.model.price1mOutput}`"></span>
+      <!-- List view -->
+      <div x-show="modelsViewMode === 'list'">
+        <template x-if="rankedModelsByIntelligence.length === 0">
+          <div class="glass rounded-card p-8 text-center mt-3">
+            <p class="text-sm t-soft">No models match your search query.</p>
+          </div>
+        </template>
+
+        <div class="space-y-2.5 mt-3">
+          <template x-for="(row, idx) in rankedModelsByIntelligence" :key="row.model.id">
+            <div class="glass-soft rounded-2xl px-4 py-3 flex items-center justify-between gap-3 min-w-0">
+              <!-- Left: Rank + Model info -->
+              <div class="flex items-center gap-3 min-w-0 grow">
+                <!-- Fancy number label: big, bold, beautiful, colored with provider brand color -->
+                <span class="w-14 shrink-0 text-center font-display text-2xl font-black tracking-tight"
+                  :style="`color: ${providerColor(row.model.provider)}; text-shadow: 0 0 10px color-mix(in srgb, ${providerColor(row.model.provider)} 25%, transparent)`"
+                  x-text="`#${idx + 1}`"></span>
+                <div class="min-w-0 grow">
+                  <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                    <p class="font-bold t-strong text-sm sm:text-base line-clamp-2" x-text="row.model.name"></p>
+                    <div class="flex flex-nowrap items-center gap-1.5 shrink-0">
+                      <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent-bg text-accent font-mono" x-show="row.model.intelligence !== null" x-text="`IQ: ${row.model.intelligence}`"></span>
+                      <template x-if="row.model.price1mInput !== null">
+                        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-price-in-bg text-price-in font-mono" x-text="`In: $${row.model.price1mInput}`"></span>
+                      </template>
+                      <template x-if="row.model.price1mOutput !== null">
+                        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-price-out-bg text-price-out font-mono" x-text="`Out: $${row.model.price1mOutput}`"></span>
+                      </template>
+                    </div>
+                  </div>
+                  
+                  <!-- Compact inline: Company • Date -->
+                  <div class="flex flex-wrap items-center gap-x-1.5 mt-1.5 text-[11px] t-soft font-mono">
+                    <span x-text="row.model.provider"></span>
+                    <template x-if="row.model.releasedAt">
+                      <span>• <span x-text="row.model.releasedAt"></span></span>
+                    </template>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Stats & Runs -->
+              <div class="shrink-0 text-right min-w-[70px]">
+                <template x-if="row.n > 0">
+                  <div>
+                    <p class="font-mono text-sm sm:text-base font-extrabold tabular t-strong" x-text="fmt1(row.adjusted)"></p>
+                    <p class="font-mono text-[10px] t-soft tabular"><span x-text="row.n"></span> runs</p>
+                  </div>
                 </template>
               </div>
-            </div>
-            
-            <!-- Compact inline: Company • Date -->
-            <div class="flex flex-wrap items-center gap-x-1.5 mt-1.5 text-[11px] t-soft font-mono">
-              <span x-text="row.model.provider"></span>
-              <template x-if="row.model.releasedAt">
-                <span>• <span x-text="row.model.releasedAt"></span></span>
-              </template>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right: Stats & Runs (horizontal layout preserved on mobile, no 'no runs logged') -->
-        <div class="shrink-0 text-right min-w-[70px]">
-          <template x-if="row.n > 0">
-            <div>
-              <p class="font-mono text-sm sm:text-base font-extrabold tabular t-strong" x-text="fmt1(row.adjusted)"></p>
-              <p class="font-mono text-[10px] t-soft tabular"><span x-text="row.n"></span> runs</p>
             </div>
           </template>
         </div>
       </div>
-    </template>
-  </div>
 
-  <!-- Bottom Right Timestamp -->
-  <template x-if="data.lastSyncedAt">
-    <div class="flex justify-end text-[10px] t-soft font-mono select-none pr-1">
-      <span x-text="fmtDateTimeCompact(data.lastSyncedAt)"></span>
+      <!-- Plot view -->
+      <div x-show="modelsViewMode === 'plot'" class="glass rounded-card p-3 sm:p-5 mt-3 overflow-hidden">
+        <div class="relative w-full overflow-x-auto scroll-slim pb-2" x-html="modelsPlotHtml"></div>
+      </div>
+
+      <!-- Bottom Right Timestamp -->
+      <template x-if="data.lastSyncedAt">
+        <div class="flex justify-end text-[10px] t-soft font-mono select-none pr-1 mt-3">
+          <span x-text="fmtDateTimeCompact(data.lastSyncedAt)"></span>
+        </div>
+      </template>
     </div>
   </template>
+
 </section>
+

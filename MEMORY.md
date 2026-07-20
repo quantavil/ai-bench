@@ -69,6 +69,7 @@ Leaderboard dashboard for benchmarking AI models. Built with Astro, Tailwind CSS
 - Created reusable `src/components/SelectDropdown.astro` and refactored `TabPrompts.astro` to eliminate select/dropdown styling and accessibility redundancy.
 - Moved `fmtDate`, `fmtDateTime`, and `fmtDateTimeCompact` date formatters from `appStore.js` into `src/utils/formatters.js` to decouple formatting utilities from state.
 - Precomputed tested model IDs Set in `normalise()` and cached adjusted prompt averages in `updateRankedRows()` to eliminate loop overheads on Alpine render ticks.
+- Added Intelligence vs Cost scatter plot to Models tab (`renderIntelligenceCostChart` in `svgCharts.js`) with Pareto efficiency frontier line, `MODEL_VIEW_MODES` seg toggle, and `modelsPlotHtml` getter. Blended cost = `(3*input + output) / 4`. Added unit tests in `tests/charts.test.js`.
 
 
 
