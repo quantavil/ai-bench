@@ -16,8 +16,13 @@
       <div class="flex items-center justify-between gap-3">
         <div class="seg inline-flex rounded-btn p-1">
           <template x-for="m in MODEL_VIEW_MODES" :key="m.id">
-            <button @click="modelsViewMode = m.id" class="seg-btn px-3.5 py-1 text-xs font-semibold"
-              :class="modelsViewMode === m.id ? 'seg-btn-on' : 'hover:t-strong'" x-text="m.label"></button>
+            <button @click="modelsViewMode = m.id"
+              class="seg-btn px-3 py-1 text-xs font-semibold flex items-center gap-1.5"
+              :class="modelsViewMode === m.id ? 'seg-btn-on' : 'hover:t-strong'"
+              :title="m.label" :aria-label="m.label">
+              <svg class="w-3.5 h-3.5 shrink-0"><use :href="`#${m.icon}`"></use></svg>
+              <span x-text="m.label"></span>
+            </button>
           </template>
         </div>
         <p class="font-mono text-[11px] t-soft hidden sm:block" x-show="modelsViewMode === 'plot'">Top-left is the sweet spot.</p>

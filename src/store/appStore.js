@@ -311,11 +311,8 @@ export function bench() {
     },
 
     get modelsPlotHtml() {
-      const q = this.search.trim().toLowerCase();
-      const filtered = this.data.models.filter((m) =>
-        !q || m.name.toLowerCase().includes(q) || m.provider.toLowerCase().includes(q)
-      );
-      return renderIntelligenceCostChart(filtered);
+      const topModels = this.rankedModelsByIntelligence.slice(0, 100).map((r) => r.model);
+      return renderIntelligenceCostChart(topModels);
     },
 
     // Standings rows: scored rows only, for the leaderboard.

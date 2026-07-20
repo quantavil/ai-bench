@@ -176,16 +176,13 @@ export function renderScatterChart(rows) {
 // ─── intelligence vs cost chart ──────────────────────────────────────────────
 
 export function renderIntelligenceCostChart(models) {
-  // Filter to models with both intelligence and at least one price
-  const plotModels = models.filter((m) =>
-    m.intelligence != null &&
-    (m.price1mInput != null || m.price1mOutput != null)
-  );
+  // Filter to models with intelligence index score
+  const plotModels = models.filter((m) => m.intelligence != null);
   if (!plotModels.length) {
-    return '<p class="text-sm t-soft text-center py-8">No models match your query or have valid pricing and intelligence data.</p>';
+    return '<p class="text-sm t-soft text-center py-8">No models match your search query or have intelligence index data.</p>';
   }
 
-  // Blended cost: 3:1 input-to-output ratio (fallback to available price if one is missing)
+  // Blended cost: 3:1 input-to-output ratio (fallback to available price or 0)
   const withCost = plotModels.map((m) => {
     const inp = m.price1mInput ?? m.price1mOutput ?? 0;
     const out = m.price1mOutput ?? m.price1mInput ?? 0;
@@ -195,34 +192,38 @@ export function renderIntelligenceCostChart(models) {
 
   // Helper for cost formatting
   const fmtCost = (c) => {
-    if (c < 0.1) return c.toFixed(3);
-    if (c < 1) return c.toFixed(2);
-    if (c < 10) return c.toFixed(2);
-    return fmt1(c);
+    if (c === 0) return '$0.00';
+    if (c < 0.1) return `$${c.toFixed(3)}`;
+    if (c < 10) return `$${c.toFixed(2)}`;
+    return `$${fmt1(c)}`;
   };
 
-  // --- X axis (cost) auto-scale ---
-  const costs = withCost.map((m) => m.blendedCost);
-  const maxCost = Math.max(...costs);
-  let xCeil = 1;
-  let xStep = 1;
+  // --- X axis (cost) Logarithmic Auto-Scale ---
+  const nonZeroCosts = withCost.map((m) => m.blendedCost).filter((c) => c > 0);
+  const minCost = nonZeroCosts.length ? Math.min(...nonZeroCosts) : 0.1;
+  const maxCost = nonZeroCosts.length ? Math.max(...nonZeroCosts) : 10;
 
-  if (maxCost <= 0.25) {
-    xCeil = 0.25; xStep = 0.05;
-  } else if (maxCost <= 0.5) {
-    xCeil = 0.5; xStep = 0.1;
-  } else if (maxCost <= 1) {
-    xCeil = 1; xStep = 0.2;
-  } else if (maxCost <= 2) {
-    xCeil = 2; xStep = 0.5;
-  } else if (maxCost <= 5) {
-    xCeil = 5; xStep = 1;
-  } else if (maxCost <= 20) {
-    xCeil = Math.ceil(maxCost / 5) * 5; xStep = 5;
-  } else {
-    xCeil = Math.ceil((maxCost * 1.15) / 10) * 10; xStep = 10;
-  }
-  xCeil = Math.max(0.1, xCeil);
+  const candidateTicks = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100];
+
+  let minTick = 0.01;
+  if (minCost >= 0.5) minTick = 0.1;
+  else if (minCost >= 0.05) minTick = 0.01;
+
+  let maxTick = 100;
+  if (maxCost <= 2) maxTick = 5;
+  else if (maxCost <= 8) maxTick = 10;
+  else if (maxCost <= 40) maxTick = 50;
+  else maxTick = 100;
+
+  const minLog = Math.log10(minTick);
+  const maxLog = Math.log10(maxTick);
+  const logSpan = maxLog - minLog || 1;
+
+  const getLogX = (cost) => {
+    const safeCost = Math.max(minTick, cost);
+    const val = (Math.log10(safeCost) - minLog) / logSpan;
+    return Math.max(0, Math.min(100, val * 100));
+  };
 
   // --- Y axis (intelligence) auto-scale with padding ---
   const intels = withCost.map((m) => m.intelligence);
@@ -250,7 +251,7 @@ export function renderIntelligenceCostChart(models) {
 
   // Frontier SVG polyline points (in % coordinates)
   const frontierPath = paretoFrontier.map((m) => {
-    const x = Math.min((m.blendedCost / xCeil) * 100, 100);
+    const x = getLogX(m.blendedCost);
     const y = Math.max(0, Math.min(100, ((m.intelligence - yMin) / yRange) * 100));
     return `${x},${100 - y}`;
   });
@@ -268,25 +269,23 @@ export function renderIntelligenceCostChart(models) {
       </div>`;
   }).join('');
 
-  // --- Vertical grid lines (cost axis) ---
-  const vLines = [];
-  let vIdx = 0;
-  for (let t = 0; t <= xCeil + 0.0001; t += xStep) {
-    const pct = (t / xCeil) * 100;
-    const isOdd = vIdx % 2 !== 0;
+  // --- Vertical grid lines (cost axis - log scale) ---
+  const vTicks = candidateTicks.filter((t) => t >= minTick && t <= maxTick);
+  const vLines = vTicks.map((t, idx) => {
+    const pct = getLogX(t);
+    const isOdd = idx % 2 !== 0;
     const mobileClass = isOdd ? 'hidden sm:block' : '';
-    const label = xCeil <= 1 ? `$${t.toFixed(2)}` : `$${Math.round(t)}`;
-    vLines.push(`
+    const label = t >= 1 ? `$${t}` : `$${t}`;
+    return `
       <div class="absolute top-0 bottom-0 border-l pointer-events-none ${mobileClass}" style="left:${pct}%;border-color:var(--hair)">
         <span class="absolute -bottom-5 left-0 -translate-x-1/2 text-[10px] font-mono tabular" style="color:var(--soft)">${label}</span>
-      </div>`);
-    vIdx++;
-  }
+      </div>`;
+  }).join('');
 
   // --- Dots ---
   const seenCoords = {};
   const dots = withCost.map((m) => {
-    let x = Math.min((m.blendedCost / xCeil) * 100, 100);
+    let x = getLogX(m.blendedCost);
     let y = Math.max(0, Math.min(100, ((m.intelligence - yMin) / yRange) * 100));
 
     // Collision avoidance
@@ -306,7 +305,10 @@ export function renderIntelligenceCostChart(models) {
 
     const color = providerColor(m.provider);
     const isOnFrontier = paretoFrontier.some((f) => f.id === m.id);
-    const ariaLabel = `${esc(m.name)} (${esc(m.provider)}): IQ ${m.intelligence}, $${fmtCost(m.blendedCost)}/1M tokens`;
+    const isUnpriced = m.price1mInput == null && m.price1mOutput == null;
+    const priceLabel = isUnpriced ? 'Unpriced' : `${fmtCost(m.blendedCost)}/1M`;
+
+    const ariaLabel = `${esc(m.name)} (${esc(m.provider)}): IQ ${m.intelligence}, ${priceLabel}`;
 
     const bgStyle = `background: ${withAlpha(color, 0.95)}`;
     const borderStyle = isOnFrontier
@@ -318,7 +320,7 @@ export function renderIntelligenceCostChart(models) {
     const isTop = y > 75;
     const tooltipClass = isTop ? 'top-full mt-2' : 'bottom-full mb-2';
 
-    const pricesDetail = (m.price1mInput != null && m.price1mOutput != null)
+    const pricesDetail = (!isUnpriced && m.price1mInput != null && m.price1mOutput != null)
       ? ` · In: $${m.price1mInput} Out: $${m.price1mOutput}`
       : '';
 
@@ -330,7 +332,7 @@ export function renderIntelligenceCostChart(models) {
         <div class="hidden group-hover:block group-focus:block absolute ${tooltipClass} left-1/2 -translate-x-1/2 px-2.5 py-1.5 rounded-lg text-xs font-mono whitespace-nowrap z-30 pointer-events-none shadow-xl"
              style="background:var(--glass-bg-hi);border:1px solid var(--glass-brd);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--strong)">
           <span class="font-semibold font-sans block mb-0.5">${esc(m.name)} <span class="font-normal text-[10px] t-soft">(${esc(m.provider)})</span></span>
-          IQ: ${m.intelligence} · $${fmtCost(m.blendedCost)}/1M${pricesDetail}
+          IQ: ${m.intelligence} · ${priceLabel}${pricesDetail}
         </div>
       </div>`;
   }).join('');
@@ -351,13 +353,13 @@ export function renderIntelligenceCostChart(models) {
         <span class="absolute left-1.5 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 origin-center text-[10px] font-mono tracking-wide whitespace-nowrap" style="color:var(--soft)">Intelligence Index</span>
         <div class="grow relative" style="height: 280px;">
           ${hLines}
-          ${vLines.join('')}
+          ${vLines}
           ${frontierSvg}
           ${dots}
         </div>
       </div>
       <div class="pl-12 pr-2 text-center pb-2">
-        <span class="text-[10px] font-mono tracking-wide" style="color:var(--soft)">Cost per 1M tokens ($)</span>
+        <span class="text-[10px] font-mono tracking-wide" style="color:var(--soft)">Cost per 1M tokens ($, log scale)</span>
       </div>
     </div>
   `;
