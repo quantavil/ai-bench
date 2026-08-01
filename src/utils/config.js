@@ -21,8 +21,8 @@ export const SORT_MODES = [
 // Models tab view modes.
 export const MODEL_VIEW_MODES = [
   { id: 'list', label: 'List', icon: 'icon-list' },
-  { id: 'plot', label: 'Intelligence vs Cost', icon: 'icon-plot' },
-  { id: 'timeline', label: 'Intelligence vs Release Date', icon: 'icon-calendar' },
+  { id: 'plot', label: 'IQ vs $', icon: 'icon-plot' },
+  { id: 'timeline', label: 'IQ vs Date', icon: 'icon-calendar' },
 ];
 
 // Leaderboard chart modes.

@@ -40,8 +40,8 @@
           </div>
 
           <!-- Price Range Filter Dropdown -->
-          <div class="flex items-center gap-1.5 text-xs font-mono t-soft">
-            <span>Price:</span>
+          <div class="flex items-center gap-1 text-xs font-mono t-soft">
+            <span class="font-bold text-accent">$</span>
             <select x-model="selectedPriceRange"
               class="input px-2.5 py-1 text-xs font-sans rounded-lg glass border border-glass-brd t-strong focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer">
               <template x-for="r in PRICE_RANGES" :key="r.id">
@@ -126,11 +126,14 @@
                     </div>
                   </div>
                   
-                  <!-- Compact inline: Company • Date -->
-                  <div class="flex flex-wrap items-center gap-x-1.5 mt-1.5 text-[11px] t-soft font-mono">
+                  <!-- Compact inline: Company • SVG Calendar Date -->
+                  <div class="flex flex-wrap items-center gap-x-2 mt-1.5 text-[11px] t-soft font-mono">
                     <span x-text="row.model.provider"></span>
                     <template x-if="row.model.releasedAt">
-                      <span>• <span x-text="row.model.releasedAt"></span></span>
+                      <span class="inline-flex items-center gap-1">
+                        <svg class="w-3 h-3 text-accent shrink-0"><use href="#icon-calendar"></use></svg>
+                        <span x-text="row.model.releasedAt"></span>
+                      </span>
                     </template>
                   </div>
                 </div>
