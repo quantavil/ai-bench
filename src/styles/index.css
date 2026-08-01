@@ -64,7 +64,7 @@ html {
 
 body {
   color: var(--strong);
-  background: var(--bg);
+  background: transparent;
   min-height: 100vh;
 }
 
