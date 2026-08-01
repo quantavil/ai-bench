@@ -5,7 +5,7 @@ import { CATEGORIES, SORT_MODES, CHART_MODES, MODEL_VIEW_MODES, UNDO_WINDOW_MS, 
 import { providerColor } from '../utils/providers.js';
 import { loadData, saveData, syncModels as apiSyncModels, testAaKey as apiTestAaKey } from '../api/client.js';
 import { aggregate, rank, categoriesInUse, totalRuns } from '../utils/ranking.js';
-import { renderBarChart, renderScatterChart, renderIntelligenceCostChart } from '../charts/svgCharts.js';
+import { renderBarChart, renderScatterChart, renderIntelligenceCostChart, renderIntelligenceTimelineChart } from '../charts/svgCharts.js';
 import { uid, fmt1, fmtDate, fmtDateTime, fmtDateTimeCompact } from '../utils/formatters.js';
 
 const AA_KEY_STORAGE = 'bench-aa-api-key';
@@ -69,6 +69,7 @@ export function bench() {
     sortMode: 'adjusted',
     chartMode: 'bar',
     modelsViewMode: 'list',
+    selectedModelProvider: 'all',
     search: '',
     isKeyboardOpen: false,
     expandedPrompts: {},
@@ -297,11 +298,21 @@ export function bench() {
     // Aggregated + ranked rows for the current category/sort.
     get rankedRows() { return this.cachedRankedRows; },
 
+    get availableModelProviders() {
+      const set = new Set();
+      (this.data?.models || []).forEach((m) => {
+        if (m.provider) set.add(m.provider);
+      });
+      return ['all', ...Array.from(set).sort()];
+    },
+
     // Aggregated rows for the models tab, sorted by intelligence score descending.
     get rankedModelsByIntelligence() {
       const q = this.search.trim().toLowerCase();
+      const prov = this.selectedModelProvider;
       const rows = aggregate(this.data, 'all');
       return rows
+        .filter((r) => prov === 'all' || r.model.provider.toLowerCase() === prov.toLowerCase())
         .filter((r) => !q || r.model.name.toLowerCase().includes(q) || r.model.provider.toLowerCase().includes(q))
         .sort((a, b) => {
           const intelA = a.model.intelligence !== null ? a.model.intelligence : -1;
@@ -313,6 +324,11 @@ export function bench() {
     get modelsPlotHtml() {
       const topModels = this.rankedModelsByIntelligence.slice(0, 100).map((r) => r.model);
       return renderIntelligenceCostChart(topModels);
+    },
+
+    get modelsTimelineHtml() {
+      const topModels = this.rankedModelsByIntelligence.slice(0, 100).map((r) => r.model);
+      return renderIntelligenceTimelineChart(topModels);
     },
 
     // Standings rows: scored rows only, for the leaderboard.
