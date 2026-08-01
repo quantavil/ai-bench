@@ -25,14 +25,10 @@ export const fmtDateTime = (ms) => {
 export const fmtDateTimeCompact = (ms) => {
   if (!ms) return '';
   try {
-    return new Intl.DateTimeFormat(undefined, {
-      day: '2-digit',
-      month: '2-digit',
-      year: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).format(new Date(ms)).replace(',', '');
+    const d = new Date(ms);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
   } catch {
     return '';
   }

@@ -8,7 +8,9 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "test": "bun test"
+    "test": "bun test",
+    "check": "astro check",
+    "typecheck": "astro check"
   },
   "dependencies": {
     "@astrojs/alpinejs": "^1.0.0",

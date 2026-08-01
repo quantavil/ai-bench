@@ -79,4 +79,12 @@ describe('validateDataset', () => {
     expect(result.data.models[0].name).toBe('Claude');
     expect(result.data.models[0].provider).toBe('Anthropic');
   });
+
+  test('rejects empty category string', () => {
+    const result = validateDataset({
+      models: [{ id: 'm1', name: 'Claude', provider: 'Anthropic' }],
+      prompts: [{ id: 'p1', text: 'Hi', category: '   ', runs: [] }],
+    });
+    expect(result.ok).toBe(false);
+  });
 });

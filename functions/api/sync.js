@@ -1,7 +1,7 @@
 /**
  * Cloudflare Pages Function - /api/sync
- * POST -> Fetches models from Artificial Analysis, filters top 100 by intelligence index,
- *        updates models in KV dataset, prunes obsolete model runs, and returns new dataset.
+ * POST -> Fetches models from Artificial Analysis, filters by intelligence index,
+ *        updates models in KV dataset while retaining all referenced models, and returns new dataset.
  *
  * Body: { version, apiKey } — apiKey is required (user-supplied from Settings; never hardcoded).
  */

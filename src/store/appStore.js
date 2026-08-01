@@ -561,10 +561,14 @@ export function bench() {
     },
     async saveInlineRun() {
       const modelId = this.inlineRun.modelId;
-      const score = Number(this.inlineRun.score);
+      const rawScore = this.inlineRun.score;
       const timeStr = this.inlineRun.time;
 
       if (!modelId) { this.inlineRun.error = 'Pick a model to log.'; return; }
+      if (rawScore === null || rawScore === undefined || String(rawScore).trim() === '') {
+        this.inlineRun.error = 'Score must be an integer between 0 and 100.'; return;
+      }
+      const score = Number(rawScore);
       if (!Number.isFinite(score) || !Number.isInteger(score) || score < 0 || score > 100) {
         this.inlineRun.error = 'Score must be an integer between 0 and 100.'; return;
       }

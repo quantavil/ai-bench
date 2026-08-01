@@ -327,7 +327,7 @@ export function renderIntelligenceCostChart(models) {
     const tooltipHClass = isLeft ? 'left-0 translate-x-0' : (isRight ? 'right-0 left-auto translate-x-0' : 'left-1/2 -translate-x-1/2');
 
     const pricesDetail = (!isUnpriced && m.price1mInput != null && m.price1mOutput != null)
-      ? ` · In: $${m.price1mInput} Out: $${m.price1mOutput}`
+      ? ` · In: $${esc(m.price1mInput)} Out: $${esc(m.price1mOutput)}`
       : '';
 
     return `
@@ -338,7 +338,7 @@ export function renderIntelligenceCostChart(models) {
         <div class="hidden group-hover:block group-focus:block absolute ${tooltipVClass} ${tooltipHClass} px-2 py-1 rounded-md text-[10px] font-mono whitespace-nowrap z-50 pointer-events-none shadow-xl"
              style="background:var(--glass-bg-hi);border:1px solid var(--glass-brd);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--strong)">
           <span class="font-bold font-sans block text-[10px] leading-tight">${esc(m.name)} <span class="font-normal text-[9px] t-soft">(${esc(m.provider)})</span></span>
-          <span class="text-[9px] t-soft block leading-tight mt-0.5">IQ: ${m.intelligence} · ${priceLabel}${pricesDetail}</span>
+          <span class="text-[9px] t-soft block leading-tight mt-0.5">IQ: ${esc(m.intelligence)} · ${esc(priceLabel)}${pricesDetail}</span>
         </div>
       </div>`;
   }).join('');
@@ -518,7 +518,7 @@ export function renderIntelligenceTimelineChart(models) {
         <div class="hidden group-hover:block group-focus:block absolute ${tooltipVClass} ${tooltipHClass} px-2 py-1 rounded-md text-[10px] font-mono whitespace-nowrap z-50 pointer-events-none shadow-xl"
              style="background:var(--glass-bg-hi);border:1px solid var(--glass-brd);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--strong)">
           <span class="font-bold font-sans block text-[10px] leading-tight">${esc(m.name)} <span class="font-normal text-[9px] t-soft">(${esc(m.provider)})</span></span>
-          <span class="text-[9px] t-soft block leading-tight mt-0.5">IQ: ${m.intelligence} · Released: ${esc(m.releasedAt)}</span>
+          <span class="text-[9px] t-soft block leading-tight mt-0.5">IQ: ${esc(m.intelligence)} · Released: ${esc(m.releasedAt)}</span>
         </div>
       </div>`;
   }).join('');

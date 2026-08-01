@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export const KV_KEY = 'dataset';
 
 export const LIMITS = {
@@ -35,8 +37,6 @@ export function cleanId(value) {
   return s;
 }
 
-import { z } from 'zod';
-
 const IdSchema = z.string().max(64).regex(/^[A-Za-z0-9_-]+$/);
 
 const ModelSchema = z.object({
@@ -61,7 +61,7 @@ const RunSchema = z.object({
 const PromptSchema = z.object({
   id: IdSchema,
   text: z.string().trim().min(1).max(LIMITS.maxPromptLen),
-  category: z.string().trim().max(LIMITS.maxCategoryLen).refine(isValidCharset).default('Other'),
+  category: z.string().trim().min(1).max(LIMITS.maxCategoryLen).refine(isValidCharset).default('Other'),
   createdAt: z.number().min(0).optional().default(() => Date.now()),
   runs: z.array(RunSchema).max(LIMITS.maxRunsPerPrompt),
 });
