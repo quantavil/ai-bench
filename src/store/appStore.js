@@ -59,6 +59,7 @@ export function bench() {
     aaKeyDraft: loadStoredAaKey(),
     testingAaKey: false,
     cachedRankedRows: [],
+    cachedAllAggregatedRows: [],
     cachedGlobalMean: null,
     cachedPromptAvgs: {},
     get globalMean() {
@@ -330,7 +331,7 @@ export function bench() {
       const q = this.search.trim().toLowerCase();
       const prov = this.selectedModelProvider;
       const rangeId = this.selectedPriceRange;
-      const rows = aggregate(this.data, 'all');
+      const rows = this.cachedAllAggregatedRows || [];
 
       let minPrice = 0;
       let maxPrice = Infinity;
@@ -349,20 +350,17 @@ export function bench() {
       }
 
       return rows
-        .filter((r) => prov === 'all' || r.model.provider.toLowerCase() === prov.toLowerCase())
-        .filter((r) => !q || r.model.name.toLowerCase().includes(q) || r.model.provider.toLowerCase().includes(q))
         .filter((r) => {
+          const m = r.model;
+          if (prov !== 'all' && m.provider.toLowerCase() !== prov.toLowerCase()) return false;
+          if (q && !m.name.toLowerCase().includes(q) && !m.provider.toLowerCase().includes(q)) return false;
           if (rangeId === 'all') return true;
-          const cost = this.getModelCost(r.model);
+          const cost = this.getModelCost(m);
           if (cost === null) return rangeId === 'free';
           if (rangeId === 'free') return cost === 0;
           return cost >= minPrice && cost <= maxPrice;
         })
-        .sort((a, b) => {
-          const intelA = a.model.intelligence !== null ? a.model.intelligence : -1;
-          const intelB = b.model.intelligence !== null ? b.model.intelligence : -1;
-          return intelB - intelA;
-        });
+        .sort((a, b) => (b.model.intelligence ?? -1) - (a.model.intelligence ?? -1));
     },
 
     get paginatedModels() {
@@ -375,9 +373,7 @@ export function bench() {
 
     get bestModelInRange() {
       const rows = this.rankedModelsByIntelligence;
-      if (!rows.length) return null;
-      const top = rows.find((r) => r.model.intelligence != null);
-      return top ? top.model : null;
+      return rows.find((r) => r.model.intelligence != null)?.model ?? null;
     },
 
     get modelsPlotHtml() {
@@ -405,8 +401,7 @@ export function bench() {
     get filteredPrompts() {
       const q = this.search.trim().toLowerCase();
       return this.data.prompts
-        .filter((p) => this.category === 'all' || p.category === this.category)
-        .filter((p) => !q || p.text.toLowerCase().includes(q) || p.category.toLowerCase().includes(q))
+        .filter((p) => (this.category === 'all' || p.category === this.category) && (!q || p.text.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)))
         .sort((a, b) => b.createdAt - a.createdAt);
     },
 
@@ -624,39 +619,37 @@ export function bench() {
       const timeStr = this.inlineRun.time;
 
       if (!modelId) { this.inlineRun.error = 'Pick a model to log.'; return; }
-      if (rawScore === null || rawScore === undefined || String(rawScore).trim() === '') {
+      if (rawScore == null || String(rawScore).trim() === '') {
         this.inlineRun.error = 'Score must be an integer between 0 and 100.'; return;
       }
       const score = Number(rawScore);
-      if (!Number.isFinite(score) || !Number.isInteger(score) || score < 0 || score > 100) {
+      if (!Number.isInteger(score) || score < 0 || score > 100) {
         this.inlineRun.error = 'Score must be an integer between 0 and 100.'; return;
       }
 
       let parsedTime = 0;
-      if (timeStr === undefined || timeStr === null || timeStr.toString().trim() === '') {
+      const str = timeStr?.toString().trim();
+      if (!str) {
         parsedTime = 0;   // blank = unknown, excluded from time stats
+      } else if (/^\d+(\.\d+)?$/.test(str)) {
+        parsedTime = Number(str);
       } else {
-        const str = timeStr.toString().trim();
-        if (/^\d+(\.\d+)?$/.test(str)) {
-          parsedTime = Number(str);
-        } else {
-          let seconds = 0;
-          const regex = /(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|s|sec|secs|second|seconds)\b/gi;
-          let match;
-          let found = false;
-          while ((match = regex.exec(str)) !== null) {
-            found = true;
-            const val = parseFloat(match[1]);
-            const unit = match[2].toLowerCase();
-            if (unit.startsWith('m')) seconds += val * 60;
-            else if (unit.startsWith('s')) seconds += val;
-          }
-          if (!found) {
-            this.inlineRun.error = 'Time format not recognized. Use seconds (e.g. 120) or format like 1m 20s.';
-            return;
-          }
-          parsedTime = seconds;
+        let seconds = 0;
+        const regex = /(\d+(?:\.\d+)?)\s*(m|min|mins|minute|minutes|s|sec|secs|second|seconds)\b/gi;
+        let match;
+        let found = false;
+        while ((match = regex.exec(str)) !== null) {
+          found = true;
+          const val = parseFloat(match[1]);
+          const unit = match[2].toLowerCase();
+          if (unit.startsWith('m')) seconds += val * 60;
+          else if (unit.startsWith('s')) seconds += val;
         }
+        if (!found) {
+          this.inlineRun.error = 'Time format not recognized. Use seconds (e.g. 120) or format like 1m 20s.';
+          return;
+        }
+        parsedTime = seconds;
       }
 
       if (!Number.isFinite(parsedTime) || parsedTime < 0) {
@@ -778,7 +771,8 @@ export function bench() {
     },
 
     updateRankedRows() {
-      const aggregated = aggregate(this.data, this.category);
+      this.cachedAllAggregatedRows = aggregate(this.data, 'all');
+      const aggregated = this.category === 'all' ? this.cachedAllAggregatedRows : aggregate(this.data, this.category);
       this.cachedRankedRows = rank(aggregated, this.sortMode);
       const globalMean = aggregated.globalMean;
       this.cachedGlobalMean = globalMean;
