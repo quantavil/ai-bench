@@ -11,7 +11,7 @@ import SelectDropdown from './SelectDropdown.astro';
         <thead>
           <tr>
             <th
-              class="sticky left-0 z-10 text-left font-mono text-[11px] uppercase tracking-wide t-soft px-3 py-3 min-w-[120px] max-w-[140px] sm:min-w-[200px] sm:max-w-[280px]"
+              class="sticky left-0 z-10 text-left font-mono text-[11px] uppercase tracking-wide t-soft px-3 py-3 min-w-[150px] max-w-[220px] sm:min-w-[200px] sm:max-w-[280px]"
               style="background:var(--sticky-bg);border-right:1px solid var(--hair)">Prompt</th>
             <template x-for="m in data.models" :key="m.id">
               <th class="px-2 py-3 text-center align-bottom min-w-[80px] max-w-[80px]">
@@ -26,7 +26,7 @@ import SelectDropdown from './SelectDropdown.astro';
           <template x-for="p in filteredPrompts" :key="p.id">
             <tr class="border-t" style="border-color:var(--hair)">
               <td
-                class="sticky left-0 z-10 px-3 py-2 align-middle min-w-[120px] max-w-[140px] sm:min-w-[200px] sm:max-w-[280px]"
+                class="sticky left-0 z-10 px-3 py-2 align-middle min-w-[150px] max-w-[220px] sm:min-w-[200px] sm:max-w-[280px]"
                 style="background:var(--sticky-bg);border-right:1px solid var(--hair)">
                 <span class="block truncate t-strong" x-text="p.text" :title="p.text"></span>
               </td>
@@ -34,14 +34,14 @@ import SelectDropdown from './SelectDropdown.astro';
                 <td class="px-2 py-2 text-center min-w-[80px] max-w-[80px]">
                   <template x-if="p.runsMap[m.id]">
                     <button @click="openEditRun(p.id, p.runsMap[m.id])"
-                      class="inline-flex items-center justify-center min-w-[36px] rounded-lg px-1.5 py-1 font-mono text-xs font-bold tabular"
+                      class="inline-flex items-center justify-center min-w-[40px] min-h-[36px] rounded-lg px-2 py-1 font-mono text-xs font-bold tabular cursor-pointer"
                       :style="matrixCellStyle(p.runsMap[m.id].score)"
                       :title="m.name + ' · ' + fmt1(p.runsMap[m.id].score)"
                       x-text="Math.round(p.runsMap[m.id].score)"></button>
                   </template>
                   <template x-if="!p.runsMap[m.id]">
                     <button @click="openAddRun(p.id, m.id)" aria-label="Log run"
-                      class="inline-flex items-center justify-center min-w-[36px] rounded-lg px-1.5 py-1 chip hover:t-strong">+</button>
+                      class="inline-flex items-center justify-center min-w-[40px] min-h-[36px] rounded-lg px-2 py-1 chip hover:t-strong cursor-pointer">+</button>
                   </template>
                 </td>
               </template>

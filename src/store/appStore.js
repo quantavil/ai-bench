@@ -51,7 +51,7 @@ export function bench() {
     // data + meta
     data: { version: 0, models: [], prompts: [], lastSyncedAt: null },
     loading: true,
-    dark: document.documentElement.classList.contains('dark'),
+    dark: typeof document !== 'undefined' ? document.documentElement.classList.contains('dark') : false,
     saving: false,
     syncing: false,
     // Artificial Analysis key lives only in this browser (localStorage), never in KV.
@@ -71,6 +71,7 @@ export function bench() {
     sortMode: 'adjusted',
     chartMode: 'bar',
     modelsViewMode: 'list',
+    modelsVisibleCount: 50,
     selectedModelProvider: 'all',
     selectedPriceRange: 'all',
     customMinPrice: '',
@@ -354,6 +355,7 @@ export function bench() {
           if (rangeId === 'all') return true;
           const cost = this.getModelCost(r.model);
           if (cost === null) return rangeId === 'free';
+          if (rangeId === 'free') return cost === 0;
           return cost >= minPrice && cost <= maxPrice;
         })
         .sort((a, b) => {
@@ -361,6 +363,14 @@ export function bench() {
           const intelB = b.model.intelligence !== null ? b.model.intelligence : -1;
           return intelB - intelA;
         });
+    },
+
+    get paginatedModels() {
+      return this.rankedModelsByIntelligence.slice(0, this.modelsVisibleCount);
+    },
+
+    loadMoreModels() {
+      this.modelsVisibleCount += 50;
     },
 
     get bestModelInRange() {
