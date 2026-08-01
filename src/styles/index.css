@@ -67,12 +67,16 @@ body {
 }
 
 /* Living aurora the glass refracts. Fixed, cheap, drifts slowly. */
+/* Living aurora the glass refracts. Fixed, cheap, drifts slowly. */
 .aurora {
   position: fixed;
   inset: -10%;
   z-index: -2;
   pointer-events: none;
   filter: blur(40px) saturate(150%);
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .aurora::before,
@@ -80,6 +84,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
+  transform: translateZ(0);
 }
 
 .aurora::before {
@@ -138,8 +143,8 @@ button[disabled] {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: .35;
-  mix-blend-mode: overlay;
+  opacity: .18;
+  transform: translateZ(0);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
