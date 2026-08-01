@@ -1,7 +1,7 @@
 export const KV_KEY = 'dataset';
 
 export const LIMITS = {
-  maxModels: 500,
+  maxModels: 2000,
   maxPrompts: 2000,
   maxRunsPerPrompt: 500,
   maxNameLen: 200,

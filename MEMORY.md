@@ -15,7 +15,7 @@ Leaderboard dashboard for benchmarking AI models. Built with Astro, Tailwind CSS
 - `src/utils/providers.js` - Brand color lookup helpers.
 - `src/utils/formatters.js` - Clean string & UID formatting utilities.
 - `functions/api/data.js` - Cloudflare Pages KV API (GET/POST) with strict validation.
-- `functions/api/sync.js` - POST sync top 100 models from Artificial Analysis; requires `apiKey` in body (user-supplied).
+- `functions/api/sync.js` - POST sync models from Artificial Analysis; requires `apiKey` in body (user-supplied).
 - `functions/api/test-aa.js` - POST probe AA API key (Settings "Test key"); does not touch KV.
 - `functions/api/_shared.js` - Shared helpers, Zod dataset validation, `readJsonBody`, AA helpers.
 - `tests/` - `bun test` unit tests for ranking + validateDataset.

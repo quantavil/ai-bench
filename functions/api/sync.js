@@ -57,8 +57,8 @@ export async function onRequest(context) {
     let page = 1;
     let hasMore = true;
 
-    // Fetch pages recursively (up to 10 pages maximum to avoid timeouts)
-    while (hasMore && page <= 10) {
+    // Fetch pages recursively (up to 50 pages to retrieve all available models)
+    while (hasMore && page <= 50) {
       const pageUrl = page === 1 ? AA_MODELS_URL : `${AA_MODELS_URL}?page=${page}`;
       const res = await fetch(pageUrl, {
         headers: {
@@ -151,9 +151,9 @@ export async function onRequest(context) {
     }
 
     uniqueModels.sort((a, b) => b.intelligence - a.intelligence);
-    const top100 = uniqueModels.slice(0, 100);
+    const syncedModels = uniqueModels;
 
-    if (top100.length === 0) {
+    if (syncedModels.length === 0) {
       return json({ error: 'No models with valid intelligence index found.' }, 500);
     }
 
@@ -185,7 +185,7 @@ export async function onRequest(context) {
       }
     }
 
-    const keep = new Map(top100.map(m => [m.id, m]));
+    const keep = new Map(syncedModels.map(m => [m.id, m]));
     if (Array.isArray(dataset.models)) {
       for (const m of dataset.models) {
         if (referenced.has(m.id) && !keep.has(m.id)) {

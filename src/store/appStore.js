@@ -322,13 +322,13 @@ export function bench() {
     },
 
     get modelsPlotHtml() {
-      const topModels = this.rankedModelsByIntelligence.slice(0, 100).map((r) => r.model);
-      return renderIntelligenceCostChart(topModels);
+      const models = this.rankedModelsByIntelligence.map((r) => r.model);
+      return renderIntelligenceCostChart(models);
     },
 
     get modelsTimelineHtml() {
-      const topModels = this.rankedModelsByIntelligence.slice(0, 100).map((r) => r.model);
-      return renderIntelligenceTimelineChart(topModels);
+      const models = this.rankedModelsByIntelligence.map((r) => r.model);
+      return renderIntelligenceTimelineChart(models);
     },
 
     // Standings rows: scored rows only, for the leaderboard.
