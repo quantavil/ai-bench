@@ -29,10 +29,10 @@
           </div>
 
           <!-- Company / Provider Filter Dropdown -->
-          <div class="flex items-center gap-1.5 text-xs font-mono t-soft">
-            <span>Company:</span>
+          <div class="flex items-center gap-1 text-xs font-mono t-soft">
+            <svg class="w-3.5 h-3.5 text-accent shrink-0" aria-label="Filter by company"><use href="#icon-company"></use></svg>
             <select x-model="selectedModelProvider"
-              class="input px-2.5 py-1 text-xs font-sans rounded-lg glass border border-glass-brd t-strong focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer">
+              class="input px-2 py-0.5 max-w-[110px] sm:max-w-[130px] text-xs font-sans rounded-md glass border border-glass-brd t-strong focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer truncate">
               <template x-for="p in availableModelProviders" :key="p">
                 <option :value="p" x-text="p === 'all' ? 'All Companies' : p" :selected="selectedModelProvider === p"></option>
               </template>
@@ -43,7 +43,7 @@
           <div class="flex items-center gap-1 text-xs font-mono t-soft">
             <span class="font-bold text-accent">$</span>
             <select x-model="selectedPriceRange"
-              class="input px-2.5 py-1 text-xs font-sans rounded-lg glass border border-glass-brd t-strong focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer">
+              class="input px-2 py-0.5 max-w-[110px] sm:max-w-[130px] text-xs font-sans rounded-md glass border border-glass-brd t-strong focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer truncate">
               <template x-for="r in PRICE_RANGES" :key="r.id">
                 <option :value="r.id" x-text="r.label" :selected="selectedPriceRange === r.id"></option>
               </template>
@@ -51,10 +51,10 @@
           </div>
 
           <!-- Cost Basis Dropdown -->
-          <div class="flex items-center gap-1.5 text-xs font-mono t-soft" x-show="selectedPriceRange !== 'all'">
+          <div class="flex items-center gap-1 text-xs font-mono t-soft" x-show="selectedPriceRange !== 'all'">
             <span>Basis:</span>
             <select x-model="costBasis"
-              class="input px-2 py-1 text-xs font-sans rounded-lg glass border border-glass-brd t-strong focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer">
+              class="input px-2 py-0.5 max-w-[100px] text-xs font-sans rounded-md glass border border-glass-brd t-strong focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer truncate">
               <template x-for="b in COST_BASIS_OPTIONS" :key="b.id">
                 <option :value="b.id" x-text="b.label" :selected="costBasis === b.id"></option>
               </template>
@@ -66,10 +66,10 @@
             <div class="flex items-center gap-1 text-xs font-mono t-soft">
               <span>$</span>
               <input type="number" step="0.01" min="0" placeholder="Min" x-model="customMinPrice"
-                class="input w-16 px-2 py-1 text-xs font-sans rounded-lg glass border border-glass-brd t-strong focus:outline-none focus:ring-1 focus:ring-accent" />
+                class="input w-16 px-2 py-0.5 text-xs font-sans rounded-md glass border border-glass-brd t-strong focus:outline-none focus:ring-1 focus:ring-accent" />
               <span>–</span>
               <input type="number" step="0.01" min="0" placeholder="Max" x-model="customMaxPrice"
-                class="input w-16 px-2 py-1 text-xs font-sans rounded-lg glass border border-glass-brd t-strong focus:outline-none focus:ring-1 focus:ring-accent" />
+                class="input w-16 px-2 py-0.5 text-xs font-sans rounded-md glass border border-glass-brd t-strong focus:outline-none focus:ring-1 focus:ring-accent" />
             </div>
           </template>
         </div>
@@ -105,7 +105,7 @@
 
         <div class="space-y-2.5 mt-3">
           <template x-for="(row, idx) in paginatedModels" :key="row.model.id">
-            <div class="glass-soft rounded-2xl px-4 py-3 flex items-center justify-between gap-3 min-w-0">
+            <div class="glass-soft performance-card rounded-2xl px-4 py-3 flex items-center justify-between gap-3 min-w-0">
               <!-- Left: Rank + Model info -->
               <div class="flex items-center gap-3 min-w-0 grow">
                 <!-- Fancy number label: big, bold, beautiful, colored with provider brand color -->

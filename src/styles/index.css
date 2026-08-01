@@ -205,6 +205,12 @@ button[disabled] {
   border: 1px solid var(--glass-brd-soft);
   -webkit-backdrop-filter: blur(8px) saturate(160%);
   backdrop-filter: blur(8px) saturate(160%);
+  transform: translateZ(0);
+}
+
+.performance-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 64px;
 }
 
 /* Text helpers */
