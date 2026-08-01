@@ -1,7 +1,7 @@
 // The Alpine component. Holds state, wires the pure helpers to the UI, and
 // owns every mutation + persist cycle.
 
-import { CATEGORIES, SORT_MODES, CHART_MODES, MODEL_VIEW_MODES, UNDO_WINDOW_MS, SHRINKAGE_C } from '../utils/config.js';
+import { CATEGORIES, SORT_MODES, CHART_MODES, MODEL_VIEW_MODES, PRICE_RANGES, COST_BASIS_OPTIONS, UNDO_WINDOW_MS, SHRINKAGE_C } from '../utils/config.js';
 import { providerColor } from '../utils/providers.js';
 import { loadData, saveData, syncModels as apiSyncModels, testAaKey as apiTestAaKey } from '../api/client.js';
 import { aggregate, rank, categoriesInUse, totalRuns } from '../utils/ranking.js';
@@ -45,6 +45,8 @@ export function bench() {
     SORT_MODES,
     CHART_MODES,
     MODEL_VIEW_MODES,
+    PRICE_RANGES,
+    COST_BASIS_OPTIONS,
 
     // data + meta
     data: { version: 0, models: [], prompts: [], lastSyncedAt: null },
@@ -70,6 +72,10 @@ export function bench() {
     chartMode: 'bar',
     modelsViewMode: 'list',
     selectedModelProvider: 'all',
+    selectedPriceRange: 'all',
+    customMinPrice: '',
+    customMaxPrice: '',
+    costBasis: 'blended',
     search: '',
     isKeyboardOpen: false,
     expandedPrompts: {},
@@ -306,19 +312,62 @@ export function bench() {
       return ['all', ...Array.from(set).sort()];
     },
 
+    getModelCost(m) {
+      if (!m) return null;
+      const inp = m.price1mInput;
+      const out = m.price1mOutput;
+      if (this.costBasis === 'input') return inp;
+      if (this.costBasis === 'output') return out;
+      if (inp == null && out == null) return null;
+      const i = inp ?? out ?? 0;
+      const o = out ?? inp ?? 0;
+      return (3 * i + o) / 4;
+    },
+
     // Aggregated rows for the models tab, sorted by intelligence score descending.
     get rankedModelsByIntelligence() {
       const q = this.search.trim().toLowerCase();
       const prov = this.selectedModelProvider;
+      const rangeId = this.selectedPriceRange;
       const rows = aggregate(this.data, 'all');
+
+      let minPrice = 0;
+      let maxPrice = Infinity;
+
+      if (rangeId === 'custom') {
+        const minVal = parseFloat(this.customMinPrice);
+        const maxVal = parseFloat(this.customMaxPrice);
+        minPrice = !isNaN(minVal) ? minVal : 0;
+        maxPrice = !isNaN(maxVal) ? maxVal : Infinity;
+      } else {
+        const preset = PRICE_RANGES.find((p) => p.id === rangeId);
+        if (preset) {
+          minPrice = preset.min;
+          maxPrice = preset.max;
+        }
+      }
+
       return rows
         .filter((r) => prov === 'all' || r.model.provider.toLowerCase() === prov.toLowerCase())
         .filter((r) => !q || r.model.name.toLowerCase().includes(q) || r.model.provider.toLowerCase().includes(q))
+        .filter((r) => {
+          if (rangeId === 'all') return true;
+          const cost = this.getModelCost(r.model);
+          if (cost === null) return rangeId === 'free';
+          return cost >= minPrice && cost <= maxPrice;
+        })
         .sort((a, b) => {
           const intelA = a.model.intelligence !== null ? a.model.intelligence : -1;
           const intelB = b.model.intelligence !== null ? b.model.intelligence : -1;
           return intelB - intelA;
         });
+    },
+
+    get bestModelInRange() {
+      const rows = this.rankedModelsByIntelligence;
+      if (!rows.length) return null;
+      const top = rows.find((r) => r.model.intelligence != null);
+      return top ? top.model : null;
     },
 
     get modelsPlotHtml() {
