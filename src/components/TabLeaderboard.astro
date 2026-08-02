@@ -36,8 +36,8 @@
 
     <!-- Ranked standings -->
     <div class="mt-6 space-y-2.5">
-      <template x-for="row in leaderboardRows" :key="row.model.id">
-        <div class="rounded-2xl px-3.5 py-3 flex items-center gap-3 leaderboard-row"
+      <template x-for="row in chartRows" :key="row.model.id">
+        <div class="rounded-2xl px-3.5 py-3 flex items-center gap-3"
           :class="row.rank === 1 ? 'glass glass-hi' : (row.rank <= 3 ? 'glass glass-hi' : 'glass-soft')"
           :style="rowStyle(row)">
           <span class="w-8 shrink-0 text-center font-mono text-base font-bold tabular"

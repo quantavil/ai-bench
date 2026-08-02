@@ -1,26 +1,81 @@
-// Native HTML/CSS chart renderers. No Chart.js dependency. Each function takes
-// ranked rows and returns an HTML string that Alpine injects via x-html.
-// Styling uses CSS custom properties so both themes work without JS toggling.
+// Renderers for the views that are too dense to bind element-by-element: the
+// charts and the coverage grid. Each returns an HTML string that Alpine injects
+// via x-html, so hundreds of dots or thousands of cells cost one parse instead
+// of thousands of reactive effects.
+//
+// All presentation lives in index.css under .plot-* / .bar-* / .matrix-*, which
+// keeps the generated markup small — it is re-parsed on every render.
 
 import { providerColor } from '../utils/providers.js';
 import { fmt1 } from '../utils/formatters.js';
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
+const clamp = (v, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 
+const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 function esc(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(s).replace(/[&<>"]/g, (c) => ESCAPES[c]);
 }
 
-function withAlpha(color, alpha) {
-  return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
+// ─── shared plot pieces ──────────────────────────────────────────────────────
+
+// Nudge coincident points apart along a golden-angle spiral so none hides another.
+function spread(points) {
+  const seen = new Map();
+  return points.map((p) => {
+    const key = `${p.x.toFixed(1)}-${p.y.toFixed(1)}`;
+    const n = seen.get(key) || 0;
+    seen.set(key, n + 1);
+    if (!n) return p;
+    const angle = n * 2.39996;
+    const dist = 0.8 * Math.sqrt(n);
+    return { ...p, x: clamp(p.x + Math.cos(angle) * dist), y: clamp(p.y + Math.sin(angle) * dist) };
+  });
 }
 
-function renderHorizontalGridlines(values, offsetClass) {
-  return values.map((v) => `
-    <div class="absolute left-0 right-0 border-t pointer-events-none" style="bottom:${v}%; border-color:var(--hair)">
-      <span class="absolute ${offsetClass} -top-2 text-[9px] sm:text-[10px] font-mono tabular" style="color:var(--soft)">${v}</span>
-    </div>
-  `).join('');
+// `lead` marks a frontier/peak member, `faint` a low-confidence one.
+function dot(p) {
+  const cls = ['plot-dot', p.lead && 'plot-dot--lead', p.faint && 'plot-dot--faint'].filter(Boolean).join(' ');
+  const tip = ['plot-tip', p.y > 74 && 'plot-tip--under', p.x < 15 && 'plot-tip--start', p.x > 85 && 'plot-tip--end']
+    .filter(Boolean).join(' ');
+  return `<div class="${cls}" style="left:${p.x.toFixed(2)}%;bottom:${p.y.toFixed(2)}%;--c:${p.color}" tabindex="0" role="img" aria-label="${esc(p.aria)}"><span class="${tip}"><b>${esc(p.title)}</b><i>${esc(p.sub)}</i></span></div>`;
+}
+
+// ticks are { pct, label }. Every other vertical tick is hidden on narrow screens.
+const hGrid = (ticks) => ticks.map((t) => `<u class="grid-h" style="bottom:${t.pct}%"><span>${t.label}</span></u>`).join('');
+const vGrid = (ticks) => ticks.map((t, i) => `<u class="grid-v${i % 2 ? ' grid-v--wide' : ''}" style="left:${t.pct}%"><span>${t.label}</span></u>`).join('');
+
+const SCORE_TICKS = [0, 25, 50, 75, 100].map((v) => ({ pct: v, label: v }));
+
+// A dashed polyline across the plot area in 0-100 space, plus a corner caption.
+function trace(points, caption) {
+  if (points.length < 2) return '';
+  const pts = points.map((p) => `${p.x.toFixed(2)},${(100 - p.y).toFixed(2)}`).join(' ');
+  return `<svg class="plot-trace" preserveAspectRatio="none" viewBox="0 0 100 100"><polyline points="${pts}"/></svg><span class="plot-note">${caption}</span>`;
+}
+
+// The frame every scatter-style chart shares.
+function plot({ yLabel, xLabel, h, v, points, overlay = '' }) {
+  const dots = spread(points).map(dot).join('');
+  return `<div class="plot"><div class="plot-body"><span class="plot-ylabel">${yLabel}</span><div class="plot-area">${hGrid(h)}${vGrid(v)}${overlay}${dots}</div></div><span class="plot-xlabel">${xLabel}</span></div>`;
+}
+
+const empty = (msg) => `<p class="plot-empty">${msg}</p>`;
+
+// Auto-scaled 0-100 axis padded to clean multiples of 5.
+function scale(values) {
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  const pad = (hi - lo || 10) * 0.12;
+  let min = Math.floor((lo - pad) / 5) * 5;
+  let max = Math.ceil((hi + pad) / 5) * 5;
+  if (min === max) { min -= 5; max += 5; }
+  min = Math.max(0, min);
+  max = Math.min(100, max);
+  const range = max - min;
+  const step = range <= 20 ? 5 : range <= 50 ? 10 : 20;
+  const ticks = [];
+  for (let v = min; v <= max; v += step) ticks.push({ pct: ((v - min) / range) * 100, label: v });
+  return { ticks, at: (v) => clamp(((v - min) / range) * 100) };
 }
 
 // ─── vertical bar chart ──────────────────────────────────────────────────────
@@ -29,514 +84,210 @@ export function renderBarChart(rows) {
   if (!rows.length) return '';
 
   const bars = rows.map((r) => {
-    const pct = Math.max(0, Math.min(100, r.adjusted));
-    const color = providerColor(r.model.provider);
-    const timeStr = r.avgTime != null ? ` · ${fmt1(r.avgTime)}s avg` : '';
-    const isLowN = r.lowConfidence;
-    const tooltip = `${fmt1(r.adjusted)} adj · ${r.n} run${r.n === 1 ? '' : 's'}${timeStr}${isLowN ? ' (low n)' : ''}`;
-
-    const borderStyle = isLowN ? `border: 2px dashed ${color}` : `border: 1px solid ${color}`;
-    const bgStyle = isLowN ? `background: ${withAlpha(color, 0.45)}` : `background: ${withAlpha(color, 0.85)}`;
-    const shadowStyle = isLowN ? '' : `; box-shadow: 0 4px 12px -4px ${withAlpha(color, 0.5)}`;
-
-    return `
-      <div class="relative flex flex-col items-center justify-end h-full flex-1 min-w-[38px] sm:min-w-[48px] group" title="${esc(tooltip)}">
-        <!-- Top Label (Value) -->
-        <span class="absolute left-0 right-0 text-center text-[10px] font-mono font-bold tabular t-strong pointer-events-none"
-              style="bottom: calc(${pct}% + 6px);">
-          ${fmt1(r.adjusted)}
-        </span>
-        
-        <!-- Bar (Height scales exactly to 100% of the active container height) -->
-        <div class="w-full max-w-[2rem] sm:max-w-[2.5rem] rounded-md transition-all duration-500 ease-out hover:brightness-110 hover:scale-105 cursor-default"
-             style="height:${pct}%; ${bgStyle}; ${borderStyle}; min-height:4px${shadowStyle}">
-        </div>
-        
-        <!-- Bottom Label (Model Name - slanted to the right with ellipsis to prevent overlap and truncation) -->
-        <span class="absolute left-1/2 text-left text-[9px] sm:text-[10px] whitespace-nowrap overflow-hidden text-ellipsis cursor-default t-soft origin-top-left max-w-[70px] sm:max-w-[90px] block"
-              style="top: calc(100% + 6px); transform: rotate(45deg);"
-              title="${esc(r.model.name)}">
-          ${esc(r.model.name)}
-        </span>
-      </div>`;
+    const pct = clamp(r.adjusted);
+    const time = r.avgTime != null ? ` · ${fmt1(r.avgTime)}s avg` : '';
+    const title = `${fmt1(r.adjusted)} adj · ${r.n} run${r.n === 1 ? '' : 's'}${time}${r.lowConfidence ? ' (low n)' : ''}`;
+    return `<div class="bar-col" title="${esc(title)}"><span class="bar-val" style="bottom:calc(${pct}% + 6px)">${fmt1(r.adjusted)}</span><div class="bar${r.lowConfidence ? ' bar--faint' : ''}" style="height:${pct}%;--c:${providerColor(r.model.provider)}"></div><span class="bar-name" title="${esc(r.model.name)}">${esc(r.model.name)}</span></div>`;
   }).join('');
 
-  // Horizontal grid lines behind bars
-  const gridLines = renderHorizontalGridlines([0, 25, 50, 75, 100], '-left-7');
-
-  return `
-    <div class="relative flex items-end justify-between gap-2 sm:gap-3 w-full min-w-max" 
-         style="height: 360px; padding-top: 16px; padding-bottom: 84px; padding-left: 28px; padding-right: 48px;">
-      <div class="absolute" style="top: 16px; bottom: 84px; left: 28px; right: 48px;">
-        ${gridLines}
-      </div>
-      ${bars}
-    </div>
-  `;
+  return `<div class="bars"><div class="bars-grid">${hGrid(SCORE_TICKS)}</div>${bars}</div>`;
 }
 
-// ─── scatter chart ───────────────────────────────────────────────────────────
+// ─── coverage grid ───────────────────────────────────────────────────────────
+
+// Blue score-heat: low scores read pale, high scores deepen to vivid blue. The
+// cell carries its own background and foreground so contrast holds on both
+// themes, independent of the surface behind it.
+export function coverageCellStyle(score) {
+  const s = clamp(score);
+  const light = 80 - (s / 100) * 40;
+  const sat = 70 + (s / 100) * 22;
+  return `background:hsl(214 ${sat}% ${light}%);color:${light > 58 ? '#0b1020' : '#fff'}`;
+}
+
+// Prompts as rows, models as columns. Cells carry data-p / data-m so one
+// delegated click handler on the table replaces a listener per cell.
+export function renderCoverageGrid(prompts, models) {
+  const head = models.map((m) => {
+    const name = esc(m.name);
+    return `<th><i style="background:${providerColor(m.provider)}"></i><span title="${name}">${name}</span></th>`;
+  }).join('');
+
+  const rows = prompts.map((p) => {
+    const cells = models.map((m) => {
+      const run = p.runsMap[m.id];
+      const label = esc(m.name) + (run ? ` · ${fmt1(run.score)}` : ' · not run yet');
+      return run
+        ? `<td><button class="matrix-cell" style="${coverageCellStyle(run.score)}" data-p="${p.id}" data-m="${m.id}" title="${label}">${Math.round(run.score)}</button></td>`
+        : `<td><button class="matrix-cell chip" data-p="${p.id}" data-m="${m.id}" title="${label}" aria-label="Log run">+</button></td>`;
+    }).join('');
+    const text = esc(p.text);
+    return `<tr><th class="matrix-head" scope="row"><span title="${text}">${text}</span></th>${cells}</tr>`;
+  }).join('');
+
+  return `<table class="matrix"><thead><tr><th class="matrix-head">Prompt</th>${head}</tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ─── speed vs quality ────────────────────────────────────────────────────────
 
 export function renderScatterChart(rows) {
-  const plotRows = rows.filter((r) => r.avgTime != null);
+  const plotRows = rows.filter((r) => r.avgTime != null && Number.isFinite(r.avgTime));
   if (!plotRows.length) return '';
 
-  // Compute axis bounds. Score is always 0-100. Time auto-scales cleanly.
-  const times = plotRows.map((r) => r.avgTime).filter((t) => t != null && Number.isFinite(t));
-  const maxTime = times.length ? Math.max(...times) : 10;
-  
-  // Snap tCeil to a clean multiple of 5 or 10 to avoid ugly gridlines
+  // Snap the time ceiling to a clean multiple so the gridlines land on round numbers.
+  const maxTime = Math.max(...plotRows.map((r) => r.avgTime));
   let tCeil = 5;
-  while (tCeil < maxTime * 1.15) {
-    tCeil += tCeil <= 20 ? 5 : 10;
-  }
-  tCeil = Math.max(5, tCeil);
+  while (tCeil < maxTime * 1.15) tCeil += tCeil <= 20 ? 5 : 10;
 
-  // Determine step size based on ceiling
   const tStep = tCeil <= 10 ? 2 : tCeil <= 30 ? 5 : 10;
+  const v = [];
+  for (let t = 0; t <= tCeil; t += tStep) v.push({ pct: (t / tCeil) * 100, label: `${t}s` });
 
-  const seenCoords = {};
-  const dots = plotRows.map((r) => {
-    let x = Math.min((r.avgTime / tCeil) * 100, 100);
-    let y = Math.max(0, Math.min(100, r.adjusted));
-    
-    // Deter collision overlap using golden-angle spiral offsets
-    const coordKey = `${x.toFixed(1)}-${y.toFixed(1)}`;
-    if (seenCoords[coordKey]) {
-      const count = seenCoords[coordKey];
-      seenCoords[coordKey] = count + 1;
-      const angle = count * 2.39996; // Golden angle in radians
-      const dist = 0.8 * Math.sqrt(count); // small visual offset distance in percentage
-      x += Math.cos(angle) * dist;
-      y += Math.sin(angle) * dist;
-      x = Math.max(0, Math.min(100, x));
-      y = Math.max(0, Math.min(100, y));
-    } else {
-      seenCoords[coordKey] = 1;
-    }
+  const points = plotRows.map((r) => ({
+    x: clamp((r.avgTime / tCeil) * 100),
+    y: clamp(r.adjusted),
+    color: providerColor(r.model.provider),
+    faint: r.lowConfidence,
+    title: r.model.name + (r.lowConfidence ? ' · low n' : ''),
+    sub: `${fmt1(r.adjusted)} adj · ${fmt1(r.avgTime)}s`,
+    aria: `${r.model.name}: ${fmt1(r.adjusted)} adj, ${fmt1(r.avgTime)} seconds${r.lowConfidence ? ' (low n)' : ''}`,
+  }));
 
-    const color = providerColor(r.model.provider);
-    const isLowN = r.lowConfidence;
-    const ariaLabel = `${esc(r.model.name)}: ${fmt1(r.adjusted)} adj, ${fmt1(r.avgTime)} seconds${isLowN ? ' (low n)' : ''}`;
-
-    const borderStyle = isLowN ? `border: 2px dashed ${color}` : `border: 2px solid var(--glass-brd)`;
-    const bgStyle = isLowN ? `background: ${withAlpha(color, 0.45)}` : `background: ${withAlpha(color, 0.95)}`;
-    const shadowStyle = isLowN ? '' : `; box-shadow: 0 0 8px ${withAlpha(color, 0.6)}`;
-
-    const isTop = y > 75;
-    const tooltipVClass = isTop ? 'top-full mt-1.5' : 'bottom-full mb-1.5';
-    const isLeft = x < 15;
-    const isRight = x > 85;
-    const tooltipHClass = isLeft ? 'left-0 translate-x-0' : (isRight ? 'right-0 left-auto translate-x-0' : 'left-1/2 -translate-x-1/2');
-
-    return `
-      <div class="absolute w-3.5 h-3.5 rounded-full -translate-x-1/2 translate-y-1/2 transition-transform duration-200 hover:scale-150 focus:scale-150 cursor-default z-10 hover:z-50 focus:z-50 group focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-           tabindex="0"
-           style="left:${x}%; bottom:${y}%; ${bgStyle}; ${borderStyle}${shadowStyle}"
-           role="img" aria-label="${ariaLabel}">
-        <div class="hidden group-hover:block group-focus:block absolute ${tooltipVClass} ${tooltipHClass} px-2 py-1 rounded-md text-[10px] font-mono whitespace-nowrap z-50 pointer-events-none shadow-xl"
-             style="background:var(--glass-bg-hi);border:1px solid var(--glass-brd);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--strong)">
-          <span class="font-bold font-sans block text-[10px] leading-tight">${esc(r.model.name)}${isLowN ? ' <span class="text-[8px] px-1 rounded font-mono uppercase bg-danger/20 text-danger inline-block ml-0.5">low n</span>' : ''}</span>
-          <span class="text-[9px] t-soft block leading-tight mt-0.5">${fmt1(r.adjusted)} adj · ${fmt1(r.avgTime)}s</span>
-        </div>
-      </div>`;
-  }).join('');
-
-  // Grid lines (horizontal at 0, 25, 50, 75, 100)
-  const hLines = renderHorizontalGridlines([0, 25, 50, 75, 100], '-left-6');
-
-  // Vertical grid lines (time axis)
-  const vLines = [];
-  let idx = 0;
-  for (let t = 0; t <= tCeil; t += tStep) {
-    const pct = (t / tCeil) * 100;
-    const isOdd = idx % 2 !== 0;
-    const mobileClass = isOdd ? 'hidden sm:block' : '';
-    vLines.push(`
-      <div class="absolute top-0 bottom-0 border-l pointer-events-none ${mobileClass}" style="left:${pct}%;border-color:var(--hair)">
-        <span class="absolute -bottom-5 left-0 -translate-x-1/2 text-[10px] font-mono tabular" style="color:var(--soft)">${t}s</span>
-      </div>`);
-    idx++;
-  }
-
-  return `
-    <div class="w-full flex flex-col justify-between" style="height: 360px;">
-      <div class="relative flex items-stretch pl-12 pr-2 pt-3 grow">
-        <span class="absolute left-1.5 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 origin-center text-[10px] font-mono tracking-wide whitespace-nowrap" style="color:var(--soft)">Adj. score</span>
-        <div class="grow relative" style="height: 280px;">
-          ${hLines}
-          ${vLines.join('')}
-          ${dots}
-        </div>
-      </div>
-      <div class="pl-12 pr-2 text-center pb-2">
-        <span class="text-[10px] font-mono tracking-wide" style="color:var(--soft)">Avg response time (s)</span>
-      </div>
-    </div>
-  `;
+  return plot({ yLabel: 'Adj. score', xLabel: 'Avg response time (s)', h: SCORE_TICKS, v, points });
 }
 
-// ─── intelligence vs cost chart ──────────────────────────────────────────────
+// ─── intelligence vs cost ────────────────────────────────────────────────────
+
+const COST_TICKS = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100];
+
+function fmtCost(c) {
+  if (c === 0) return '$0.00';
+  if (c < 0.1) return `$${c.toFixed(3)}`;
+  if (c < 10) return `$${c.toFixed(2)}`;
+  return `$${fmt1(c)}`;
+}
 
 export function renderIntelligenceCostChart(models) {
-  // Filter to models with intelligence index score
-  const plotModels = models.filter((m) => m.intelligence != null);
-  if (!plotModels.length) {
-    return '<p class="text-sm t-soft text-center py-8">No models match your search query or have intelligence index data.</p>';
-  }
+  const scored = models.filter((m) => m.intelligence != null);
+  if (!scored.length) return empty('No models match your filters, or none have intelligence data.');
 
-  // Blended cost: 3:1 input-to-output ratio (fallback to available price or 0)
-  const withCost = plotModels.map((m) => {
+  // Blended cost: 3:1 input-to-output, matching the store's 'blended' basis.
+  const withCost = scored.map((m) => {
     const inp = m.price1mInput ?? m.price1mOutput ?? 0;
     const out = m.price1mOutput ?? m.price1mInput ?? 0;
-    const blended = (3 * inp + out) / 4;
-    return { ...m, blendedCost: blended };
+    return { ...m, cost: (3 * inp + out) / 4 };
   });
 
-  // Helper for cost formatting
-  const fmtCost = (c) => {
-    if (c === 0) return '$0.00';
-    if (c < 0.1) return `$${c.toFixed(3)}`;
-    if (c < 10) return `$${c.toFixed(2)}`;
-    return `$${fmt1(c)}`;
-  };
-
-  // --- X axis (cost) Logarithmic Auto-Scale ---
-  const nonZeroCosts = withCost.map((m) => m.blendedCost).filter((c) => c > 0);
-  const minCost = nonZeroCosts.length ? Math.min(...nonZeroCosts) : 0.1;
-  const maxCost = nonZeroCosts.length ? Math.max(...nonZeroCosts) : 10;
-
-  const candidateTicks = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100];
-
-  let minTick = 0.01;
-  if (minCost >= 0.5) minTick = 0.1;
-  else if (minCost >= 0.05) minTick = 0.01;
-
-  let maxTick = 100;
-  if (maxCost <= 2) maxTick = 5;
-  else if (maxCost <= 8) maxTick = 10;
-  else if (maxCost <= 40) maxTick = 50;
-  else maxTick = 100;
-
+  // Log X axis over the cost decades actually present.
+  const costs = withCost.map((m) => m.cost).filter((c) => c > 0);
+  const minCost = costs.length ? Math.min(...costs) : 0.1;
+  const maxCost = costs.length ? Math.max(...costs) : 10;
+  const minTick = minCost >= 0.5 ? 0.1 : 0.01;
+  const maxTick = maxCost <= 2 ? 5 : maxCost <= 8 ? 10 : maxCost <= 40 ? 50 : 100;
   const minLog = Math.log10(minTick);
-  const maxLog = Math.log10(maxTick);
-  const logSpan = maxLog - minLog || 1;
+  const logSpan = Math.log10(maxTick) - minLog || 1;
+  const atCost = (c) => clamp(((Math.log10(Math.max(minTick, c)) - minLog) / logSpan) * 100);
 
-  const getLogX = (cost) => {
-    const safeCost = Math.max(minTick, cost);
-    const val = (Math.log10(safeCost) - minLog) / logSpan;
-    return Math.max(0, Math.min(100, val * 100));
-  };
+  const y = scale(withCost.map((m) => m.intelligence));
 
-  // --- Y axis (intelligence) auto-scale with padding ---
-  const intels = withCost.map((m) => m.intelligence);
-  const rawMin = Math.min(...intels);
-  const rawMax = Math.max(...intels);
-  const span = rawMax - rawMin || 10;
-  const pad = span * 0.12;
-  let yMin = Math.floor((rawMin - pad) / 5) * 5;
-  let yMax = Math.ceil((rawMax + pad) / 5) * 5;
-  if (yMin === yMax) { yMin -= 5; yMax += 5; }
-  yMin = Math.max(0, yMin);
-  yMax = Math.min(100, yMax);
-  const yRange = yMax - yMin;
-  const yStep = yRange <= 20 ? 5 : yRange <= 50 ? 10 : 20;
+  // Pareto frontier: cheapest-first sweep keeping each new intelligence high.
+  // O(n log n) — the pairwise version pegged the CPU at 400+ models.
+  const frontier = [];
+  let bestIq = -Infinity;
+  for (const m of [...withCost].sort((a, b) => a.cost - b.cost || b.intelligence - a.intelligence)) {
+    if (m.intelligence > bestIq) {
+      bestIq = m.intelligence;
+      frontier.push(m);
+    }
+  }
+  const onFrontier = new Set(frontier.map((m) => m.id));
 
-  // --- Pareto frontier (non-dominated set: no other model has both lower/equal cost AND higher/equal intelligence) ---
-  const paretoFrontier = withCost.filter((m) => {
-    return !withCost.some((other) =>
-      other !== m &&
-      other.blendedCost <= m.blendedCost &&
-      other.intelligence >= m.intelligence &&
-      (other.blendedCost < m.blendedCost || other.intelligence > m.intelligence)
-    );
-  }).sort((a, b) => a.blendedCost - b.blendedCost);
-
-  // Frontier SVG polyline points (in % coordinates)
-  const frontierPath = paretoFrontier.map((m) => {
-    const x = getLogX(m.blendedCost);
-    const y = Math.max(0, Math.min(100, ((m.intelligence - yMin) / yRange) * 100));
-    return `${x},${100 - y}`;
+  const points = withCost.map((m) => {
+    const unpriced = m.price1mInput == null && m.price1mOutput == null;
+    const price = unpriced ? 'Unpriced' : `${fmtCost(m.cost)}/1M`;
+    const detail = !unpriced && m.price1mInput != null && m.price1mOutput != null
+      ? ` · in $${m.price1mInput} / out $${m.price1mOutput}` : '';
+    return {
+      x: atCost(m.cost),
+      y: y.at(m.intelligence),
+      color: providerColor(m.provider),
+      lead: onFrontier.has(m.id),
+      title: `${m.name} (${m.provider})`,
+      sub: `IQ ${m.intelligence} · ${price}${detail}`,
+      aria: `${m.name} (${m.provider}): IQ ${m.intelligence}, ${price}`,
+    };
   });
 
-  // --- Horizontal grid lines (intelligence axis) ---
-  const hGridValues = [];
-  for (let v = yMin; v <= yMax; v += yStep) {
-    hGridValues.push(v);
-  }
-  const hLines = hGridValues.map((v) => {
-    const pct = ((v - yMin) / yRange) * 100;
-    return `
-      <div class="absolute left-0 right-0 border-t pointer-events-none" style="bottom:${pct}%; border-color:var(--hair)">
-        <span class="absolute -left-6 -top-2 text-[9px] sm:text-[10px] font-mono tabular" style="color:var(--soft)">${v}</span>
-      </div>`;
-  }).join('');
-
-  // --- Vertical grid lines (cost axis - log scale) ---
-  const vTicks = candidateTicks.filter((t) => t >= minTick && t <= maxTick);
-  const vLines = vTicks.map((t, idx) => {
-    const pct = getLogX(t);
-    const isOdd = idx % 2 !== 0;
-    const mobileClass = isOdd ? 'hidden sm:block' : '';
-    const label = t >= 1 ? `$${t}` : `$${t}`;
-    return `
-      <div class="absolute top-0 bottom-0 border-l pointer-events-none ${mobileClass}" style="left:${pct}%;border-color:var(--hair)">
-        <span class="absolute -bottom-5 left-0 -translate-x-1/2 text-[10px] font-mono tabular" style="color:var(--soft)">${label}</span>
-      </div>`;
-  }).join('');
-
-  // --- Dots ---
-  const seenCoords = {};
-  const dots = withCost.map((m) => {
-    let x = getLogX(m.blendedCost);
-    let y = Math.max(0, Math.min(100, ((m.intelligence - yMin) / yRange) * 100));
-
-    // Collision avoidance
-    const coordKey = `${x.toFixed(1)}-${y.toFixed(1)}`;
-    if (seenCoords[coordKey]) {
-      const count = seenCoords[coordKey];
-      seenCoords[coordKey] = count + 1;
-      const angle = count * 2.39996;
-      const dist = 0.8 * Math.sqrt(count);
-      x += Math.cos(angle) * dist;
-      y += Math.sin(angle) * dist;
-      x = Math.max(0, Math.min(100, x));
-      y = Math.max(0, Math.min(100, y));
-    } else {
-      seenCoords[coordKey] = 1;
-    }
-
-    const color = providerColor(m.provider);
-    const isOnFrontier = paretoFrontier.some((f) => f.id === m.id);
-    const isUnpriced = m.price1mInput == null && m.price1mOutput == null;
-    const priceLabel = isUnpriced ? 'Unpriced' : `${fmtCost(m.blendedCost)}/1M`;
-
-    const ariaLabel = `${esc(m.name)} (${esc(m.provider)}): IQ ${m.intelligence}, ${priceLabel}`;
-
-    const bgStyle = `background: ${withAlpha(color, 0.95)}`;
-    const borderStyle = isOnFrontier
-      ? `border: 2px solid var(--color-accent)`
-      : `border: 2px solid var(--glass-brd)`;
-    const shadowStyle = `; box-shadow: 0 0 8px ${withAlpha(color, 0.6)}`;
-    const sizeClass = isOnFrontier ? 'w-4 h-4' : 'w-3.5 h-3.5';
-
-    const isTop = y > 75;
-    const tooltipVClass = isTop ? 'top-full mt-1.5' : 'bottom-full mb-1.5';
-    const isLeft = x < 15;
-    const isRight = x > 85;
-    const tooltipHClass = isLeft ? 'left-0 translate-x-0' : (isRight ? 'right-0 left-auto translate-x-0' : 'left-1/2 -translate-x-1/2');
-
-    const pricesDetail = (!isUnpriced && m.price1mInput != null && m.price1mOutput != null)
-      ? ` · In: $${esc(m.price1mInput)} Out: $${esc(m.price1mOutput)}`
-      : '';
-
-    return `
-      <div class="absolute ${sizeClass} rounded-full -translate-x-1/2 translate-y-1/2 transition-transform duration-200 hover:scale-150 focus:scale-150 cursor-default z-10 hover:z-50 focus:z-50 group focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-           tabindex="0"
-           style="left:${x}%; bottom:${y}%; ${bgStyle}; ${borderStyle}${shadowStyle}"
-           role="img" aria-label="${ariaLabel}">
-        <div class="hidden group-hover:block group-focus:block absolute ${tooltipVClass} ${tooltipHClass} px-2 py-1 rounded-md text-[10px] font-mono whitespace-nowrap z-50 pointer-events-none shadow-xl"
-             style="background:var(--glass-bg-hi);border:1px solid var(--glass-brd);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--strong)">
-          <span class="font-bold font-sans block text-[10px] leading-tight">${esc(m.name)} <span class="font-normal text-[9px] t-soft">(${esc(m.provider)})</span></span>
-          <span class="text-[9px] t-soft block leading-tight mt-0.5">IQ: ${esc(m.intelligence)} · ${esc(priceLabel)}${pricesDetail}</span>
-        </div>
-      </div>`;
-  }).join('');
-
-  // --- Frontier line (SVG overlay) ---
-  const frontierSvg = frontierPath.length >= 2 ? `
-    <svg class="absolute inset-0 w-full h-full pointer-events-none z-[5]" preserveAspectRatio="none" viewBox="0 0 100 100">
-      <polyline points="${frontierPath.join(' ')}" fill="none"
-        stroke="var(--color-accent)" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round"
-        stroke-dasharray="1.2 0.8" opacity="0.7" />
-    </svg>
-    <span class="absolute top-1 right-1 text-[9px] font-mono px-1.5 py-0.5 rounded z-20" style="color:var(--color-accent); background:var(--chip-bg); border:1px solid var(--glass-brd-soft)">Efficiency frontier</span>
-  ` : '';
-
-  return `
-    <div class="w-full flex flex-col justify-between" style="height: 360px;">
-      <div class="relative flex items-stretch pl-12 pr-2 pt-3 grow">
-        <span class="absolute left-1.5 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 origin-center text-[10px] font-mono tracking-wide whitespace-nowrap" style="color:var(--soft)">Intelligence Index</span>
-        <div class="grow relative" style="height: 280px;">
-          ${hLines}
-          ${vLines}
-          ${frontierSvg}
-          ${dots}
-        </div>
-      </div>
-      <div class="pl-12 pr-2 text-center pb-2">
-        <span class="text-[10px] font-mono tracking-wide" style="color:var(--soft)">Cost per 1M tokens ($, log scale)</span>
-      </div>
-    </div>
-  `;
+  return plot({
+    yLabel: 'Intelligence Index',
+    xLabel: 'Cost per 1M tokens ($, log scale)',
+    h: y.ticks,
+    v: COST_TICKS.filter((t) => t >= minTick && t <= maxTick).map((t) => ({ pct: atCost(t), label: `$${t}` })),
+    points,
+    overlay: trace(frontier.map((m) => ({ x: atCost(m.cost), y: y.at(m.intelligence) })), 'Efficiency frontier'),
+  });
 }
 
-// ─── intelligence vs release date timeline chart ─────────────────────────────
+// ─── intelligence vs release date ────────────────────────────────────────────
+
+// AA sends full dates, but tolerate bare "2025" / "2025-06" too.
+function parseReleased(value) {
+  const direct = Date.parse(value);
+  if (!isNaN(direct)) return direct;
+  const parts = String(value).split('-');
+  const padded = parts.length === 1 ? `${parts[0]}-01-01` : parts.length === 2 ? `${parts[0]}-${parts[1]}-01` : null;
+  const fallback = padded ? Date.parse(padded) : NaN;
+  return isNaN(fallback) ? null : fallback;
+}
 
 export function renderIntelligenceTimelineChart(models) {
-  const validModels = (models || []).filter((m) => m && m.intelligence != null && m.releasedAt);
-  if (!validModels.length) {
-    return '<p class="text-sm t-soft text-center py-8">No models match your search query or have release date data.</p>';
-  }
+  const parsed = (models || [])
+    .filter((m) => m && m.intelligence != null && m.releasedAt)
+    .map((m) => ({ ...m, at: parseReleased(m.releasedAt) }))
+    .filter((m) => m.at != null)
+    .sort((a, b) => a.at - b.at);
 
-  // Parse dates into timestamps
-  const parsed = validModels.map((m) => {
-    let t = Date.parse(m.releasedAt);
-    if (isNaN(t)) {
-      const parts = String(m.releasedAt).split('-');
-      if (parts.length === 1) t = Date.parse(`${parts[0]}-01-01`);
-      else if (parts.length === 2) t = Date.parse(`${parts[0]}-${parts[1]}-01`);
-    }
-    return { ...m, timeMs: isNaN(t) ? null : t };
-  }).filter((m) => m.timeMs != null);
+  if (!parsed.length) return empty('No models match your filters, or none have release dates.');
 
-  if (!parsed.length) {
-    return '<p class="text-sm t-soft text-center py-8">No models match your search query or have release date data.</p>';
-  }
+  const span = (parsed[parsed.length - 1].at - parsed[0].at) || 30 * 24 * 3600 * 1000;
+  const minTime = parsed[0].at - span * 0.05;
+  const fullSpan = span * 1.1 || 1;
+  const atTime = (t) => clamp(((t - minTime) / fullSpan) * 100);
 
-  parsed.sort((a, b) => a.timeMs - b.timeMs);
+  const y = scale(parsed.map((m) => m.intelligence));
 
-  const times = parsed.map((m) => m.timeMs);
-  let minTime = Math.min(...times);
-  let maxTime = Math.max(...times);
-
-  const timeSpan = maxTime - minTime || 30 * 24 * 3600 * 1000;
-  minTime -= timeSpan * 0.05;
-  maxTime += timeSpan * 0.05;
-  const fullTimeSpan = maxTime - minTime || 1;
-
-  const getTimeX = (t) => Math.max(0, Math.min(100, ((t - minTime) / fullTimeSpan) * 100));
-
-  // Y-axis: Intelligence auto-scale
-  const intels = parsed.map((m) => m.intelligence);
-  const rawMin = Math.min(...intels);
-  const rawMax = Math.max(...intels);
-  const span = rawMax - rawMin || 10;
-  const pad = span * 0.12;
-  let yMin = Math.floor((rawMin - pad) / 5) * 5;
-  let yMax = Math.ceil((rawMax + pad) / 5) * 5;
-  if (yMin === yMax) { yMin -= 5; yMax += 5; }
-  yMin = Math.max(0, yMin);
-  yMax = Math.min(100, yMax);
-  const yRange = yMax - yMin;
-  const yStep = yRange <= 20 ? 5 : yRange <= 50 ? 10 : 20;
-
-  // --- Vertical grid lines (Date ticks) ---
-  const vLines = [];
-  const numTicks = 5;
-  for (let i = 0; i < numTicks; i++) {
-    const t = minTime + (fullTimeSpan * i) / (numTicks - 1);
-    const pct = (i / (numTicks - 1)) * 100;
-    const d = new Date(t);
-    const label = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-    const isOdd = i % 2 !== 0;
-    const mobileClass = isOdd ? 'hidden sm:block' : '';
-    vLines.push(`
-      <div class="absolute top-0 bottom-0 border-l pointer-events-none ${mobileClass}" style="left:${pct}%;border-color:var(--hair)">
-        <span class="absolute -bottom-5 left-0 -translate-x-1/2 text-[10px] font-mono tabular" style="color:var(--soft)">${label}</span>
-      </div>`);
-  }
-
-  // --- Horizontal grid lines (intelligence axis) ---
-  const hGridValues = [];
-  for (let v = yMin; v <= yMax; v += yStep) {
-    hGridValues.push(v);
-  }
-  const hLines = hGridValues.map((v) => {
-    const pct = ((v - yMin) / yRange) * 100;
-    return `
-      <div class="absolute left-0 right-0 border-t pointer-events-none" style="bottom:${pct}%; border-color:var(--hair)">
-        <span class="absolute -left-6 -top-2 text-[9px] sm:text-[10px] font-mono tabular" style="color:var(--soft)">${v}</span>
-      </div>`;
-  }).join('');
-
-  // --- Progressive Peak Intelligence Line over time ---
-  let currentMaxIQ = -Infinity;
-  const peakPoints = [];
+  // Running best-so-far: the SOTA staircase.
+  const peaks = [];
+  let bestIq = -Infinity;
   for (const m of parsed) {
-    if (m.intelligence > currentMaxIQ) {
-      currentMaxIQ = m.intelligence;
-      const x = getTimeX(m.timeMs);
-      const y = Math.max(0, Math.min(100, ((m.intelligence - yMin) / yRange) * 100));
-      peakPoints.push({ x, y, model: m });
+    if (m.intelligence > bestIq) {
+      bestIq = m.intelligence;
+      peaks.push(m);
     }
   }
+  const isPeak = new Set(peaks.map((m) => m.id));
 
-  const sotaPath = peakPoints.map((p) => `${p.x},${100 - p.y}`);
-  const sotaSvg = sotaPath.length >= 2 ? `
-    <svg class="absolute inset-0 w-full h-full pointer-events-none z-[5]" preserveAspectRatio="none" viewBox="0 0 100 100">
-      <polyline points="${sotaPath.join(' ')}" fill="none"
-        stroke="var(--color-accent)" stroke-width="0.4" stroke-linecap="round" stroke-linejoin="round"
-        stroke-dasharray="1.2 0.8" opacity="0.75" />
-    </svg>
-    <span class="absolute top-1 right-1 text-[9px] font-mono px-1.5 py-0.5 rounded z-20" style="color:var(--color-accent); background:var(--chip-bg); border:1px solid var(--glass-brd-soft)">SOTA progression</span>
-  ` : '';
+  const v = Array.from({ length: 5 }, (_, i) => ({
+    pct: (i / 4) * 100,
+    label: new Date(minTime + (fullSpan * i) / 4).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+  }));
 
-  // --- Dots ---
-  const seenCoords = {};
-  const dots = parsed.map((m) => {
-    let x = getTimeX(m.timeMs);
-    let y = Math.max(0, Math.min(100, ((m.intelligence - yMin) / yRange) * 100));
+  const points = parsed.map((m) => ({
+    x: atTime(m.at),
+    y: y.at(m.intelligence),
+    color: providerColor(m.provider),
+    lead: isPeak.has(m.id),
+    title: `${m.name} (${m.provider})`,
+    sub: `IQ ${m.intelligence} · ${m.releasedAt}`,
+    aria: `${m.name} (${m.provider}): IQ ${m.intelligence}, released ${m.releasedAt}`,
+  }));
 
-    // Collision avoidance
-    const coordKey = `${x.toFixed(1)}-${y.toFixed(1)}`;
-    if (seenCoords[coordKey]) {
-      const count = seenCoords[coordKey];
-      seenCoords[coordKey] = count + 1;
-      const angle = count * 2.39996;
-      const dist = 0.8 * Math.sqrt(count);
-      x += Math.cos(angle) * dist;
-      y += Math.sin(angle) * dist;
-      x = Math.max(0, Math.min(100, x));
-      y = Math.max(0, Math.min(100, y));
-    } else {
-      seenCoords[coordKey] = 1;
-    }
-
-    const color = providerColor(m.provider);
-    const isPeak = peakPoints.some((p) => p.model.id === m.id);
-    const ariaLabel = `${esc(m.name)} (${esc(m.provider)}): IQ ${m.intelligence}, Released ${esc(m.releasedAt)}`;
-
-    const bgStyle = `background: ${withAlpha(color, 0.95)}`;
-    const borderStyle = isPeak
-      ? `border: 2px solid var(--color-accent)`
-      : `border: 2px solid var(--glass-brd)`;
-    const shadowStyle = `; box-shadow: 0 0 8px ${withAlpha(color, 0.6)}`;
-    const sizeClass = isPeak ? 'w-4 h-4' : 'w-3.5 h-3.5';
-
-    const isTop = y > 75;
-    const tooltipVClass = isTop ? 'top-full mt-1.5' : 'bottom-full mb-1.5';
-    const isLeft = x < 15;
-    const isRight = x > 85;
-    const tooltipHClass = isLeft ? 'left-0 translate-x-0' : (isRight ? 'right-0 left-auto translate-x-0' : 'left-1/2 -translate-x-1/2');
-
-    return `
-      <div class="absolute ${sizeClass} rounded-full -translate-x-1/2 translate-y-1/2 transition-transform duration-200 hover:scale-150 focus:scale-150 cursor-default z-10 hover:z-50 focus:z-50 group focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
-           tabindex="0"
-           style="left:${x}%; bottom:${y}%; ${bgStyle}; ${borderStyle}${shadowStyle}"
-           role="img" aria-label="${ariaLabel}">
-        <div class="hidden group-hover:block group-focus:block absolute ${tooltipVClass} ${tooltipHClass} px-2 py-1 rounded-md text-[10px] font-mono whitespace-nowrap z-50 pointer-events-none shadow-xl"
-             style="background:var(--glass-bg-hi);border:1px solid var(--glass-brd);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--strong)">
-          <span class="font-bold font-sans block text-[10px] leading-tight">${esc(m.name)} <span class="font-normal text-[9px] t-soft">(${esc(m.provider)})</span></span>
-          <span class="text-[9px] t-soft block leading-tight mt-0.5">IQ: ${esc(m.intelligence)} · Released: ${esc(m.releasedAt)}</span>
-        </div>
-      </div>`;
-  }).join('');
-
-  return `
-    <div class="w-full flex flex-col justify-between" style="height: 360px;">
-      <div class="relative flex items-stretch pl-12 pr-2 pt-3 grow">
-        <span class="absolute left-1.5 top-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 origin-center text-[10px] font-mono tracking-wide whitespace-nowrap" style="color:var(--soft)">Intelligence Index</span>
-        <div class="grow relative" style="height: 280px;">
-          ${hLines}
-          ${vLines.join('')}
-          ${sotaSvg}
-          ${dots}
-        </div>
-      </div>
-      <div class="pl-12 pr-2 text-center pb-2">
-        <span class="text-[10px] font-mono tracking-wide" style="color:var(--soft)">Release Date Timeline</span>
-      </div>
-    </div>
-  `;
+  return plot({
+    yLabel: 'Intelligence Index',
+    xLabel: 'Release date',
+    h: y.ticks,
+    v,
+    points,
+    overlay: trace(peaks.map((m) => ({ x: atTime(m.at), y: y.at(m.intelligence) })), 'SOTA progression'),
+  });
 }

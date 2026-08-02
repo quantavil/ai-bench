@@ -39,16 +39,27 @@ function fallback(seed) {
   for (let i = 0; i < seed.length; i++) {
     h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   }
-  const hue = h % 360;
-  return `hsl(${hue} 60% 50%)`;
+  return `hsl(${h % 360} 60% 50%)`;
 }
 
-export function providerColor(name) {
-  if (!name) return fallback('unknown');
-  const key = String(name).trim().toLowerCase();
+function resolve(key) {
   if (MAP[key]) return MAP[key];
   const hit = Object.keys(MAP)
     .filter(k => new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(key))
     .sort((a, b) => b.length - a.length)[0];
   return hit ? MAP[hit] : fallback(key);
+}
+
+// Memoised: the charts call this once per dot per render, and every miss builds
+// a regex per map entry.
+const cache = new Map();
+
+export function providerColor(name) {
+  const key = name ? String(name).trim().toLowerCase() : 'unknown';
+  let hit = cache.get(key);
+  if (hit === undefined) {
+    hit = resolve(key);
+    cache.set(key, hit);
+  }
+  return hit;
 }

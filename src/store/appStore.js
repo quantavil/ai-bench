@@ -5,7 +5,7 @@ import { CATEGORIES, SORT_MODES, CHART_MODES, MODEL_VIEW_MODES, PRICE_RANGES, CO
 import { providerColor } from '../utils/providers.js';
 import { loadData, saveData, syncModels as apiSyncModels, testAaKey as apiTestAaKey } from '../api/client.js';
 import { aggregate, rank, categoriesInUse, totalRuns } from '../utils/ranking.js';
-import { renderBarChart, renderScatterChart, renderIntelligenceCostChart, renderIntelligenceTimelineChart } from '../charts/svgCharts.js';
+import { renderBarChart, renderScatterChart, renderIntelligenceCostChart, renderIntelligenceTimelineChart, renderCoverageGrid } from '../charts/svgCharts.js';
 import { uid, fmt1, fmtDate, fmtDateTime, fmtDateTimeCompact } from '../utils/formatters.js';
 
 const AA_KEY_STORAGE = 'bench-aa-api-key';
@@ -29,12 +29,16 @@ function normalise(raw) {
       testedModelIds.add(r.modelId);
     });
   });
+  const models = raw?.models || [];
   return {
     version: raw?.version || 0,
-    models: raw?.models || [],
+    models,
     prompts,
     lastSyncedAt: raw?.lastSyncedAt || null,
-    testedModelIds
+    testedModelIds,
+    // Lookup by id: the run rows resolve a model name per row per render, and a
+    // linear scan over 400+ models made that quadratic.
+    modelsById: new Map(models.map((m) => [m.id, m])),
   };
 }
 
@@ -58,13 +62,14 @@ export function bench() {
     aaApiKey: loadStoredAaKey(),
     aaKeyDraft: loadStoredAaKey(),
     testingAaKey: false,
+    // Derived state is cached rather than computed in getters: Alpine re-reads a
+    // getter for every binding that touches it, and these walk every model.
     cachedRankedRows: [],
+    cachedScoredRows: [],
     cachedAllAggregatedRows: [],
-    cachedGlobalMean: null,
+    cachedModelRows: [],
+    cachedModelsChart: '',
     cachedPromptAvgs: {},
-    get globalMean() {
-      return this.cachedGlobalMean;
-    },
 
     // view state
     tab: 'leaderboard',           // leaderboard | prompts | models
@@ -113,26 +118,20 @@ export function bench() {
 
 
 
-      // Watch modal states to lock body scroll on mobile and control native <dialog> elements
-      const modalMap = {
-        'confirm.open': 'confirm-dialog'
-      };
-      Object.entries(modalMap).forEach(([key, dialogId]) => {
-        this.$watch(key, (val) => {
-          this.toggleBodyScroll();
-          const dialog = document.getElementById(dialogId);
-          if (dialog) {
-            if (val) {
-              if (!dialog.open) dialog.showModal();
-            } else {
-              if (dialog.open) dialog.close();
-            }
-          }
-        });
+      // Drive the native <dialog> from Alpine state. showModal() handles the
+      // backdrop, focus trap and scroll lock itself.
+      this.$watch('confirm.open', (val) => {
+        const dialog = document.getElementById('confirm-dialog');
+        if (!dialog) return;
+        if (val && !dialog.open) dialog.showModal();
+        if (!val && dialog.open) dialog.close();
       });
 
       this.$watch('category', () => this.updateRankedRows());
       this.$watch('sortMode', () => this.updateRankedRows());
+      // One watcher over the whole filter signature, so adding a filter to
+      // modelFilterKey is all it takes to keep the models tab in sync.
+      this.$watch('modelFilterKey', () => this.updateModelRows());
 
       // Keyboard detection
       const handleFocus = (e) => {
@@ -175,13 +174,22 @@ export function bench() {
     },
 
     // ---------------------------------------------------------------- persist
+    // The dataset without the client-side lookups normalise() adds. Used for
+    // both saving and exporting — a Map or Set would serialise as {}.
+    serialisable() {
+      return {
+        version: this.data.version,
+        models: this.data.models,
+        prompts: this.data.prompts.map(({ runsMap, ...p }) => p),
+        lastSyncedAt: this.data.lastSyncedAt,
+      };
+    },
+
     // Full-dataset write guarded by version. A 409 means another device wrote
     // since we loaded; we reload rather than clobber.
     async persist({ quiet = false } = {}) {
       this.saving = true;
-      const cleanPrompts = this.data.prompts.map(({ runsMap, ...p }) => p);
-      const payload = { version: this.data.version, models: this.data.models, prompts: cleanPrompts, lastSyncedAt: this.data.lastSyncedAt };
-      const res = await saveData(payload);
+      const res = await saveData(this.serialisable());
       this.saving = false;
 
       if (res.ok) {
@@ -292,14 +300,8 @@ export function bench() {
       }
     },
 
-    modelName(id) {
-      const m = this.data.models.find((x) => x.id === id);
-      return m ? m.name : 'Unknown model';
-    },
-    modelProvider(id) {
-      const m = this.data.models.find((x) => x.id === id);
-      return m ? m.provider : '';
-    },
+    modelName(id) { return this.data.modelsById.get(id)?.name || 'Unknown model'; },
+    modelProvider(id) { return this.data.modelsById.get(id)?.provider || ''; },
 
     get totalRuns() { return totalRuns(this.data); },
 
@@ -326,16 +328,25 @@ export function bench() {
       return (3 * i + o) / 4;
     },
 
+    // Every input the models tab filters on. Watched as one string in init();
+    // any new filter must be listed here or the list will not refresh.
+    get modelFilterKey() {
+      return [
+        this.search, this.selectedModelProvider, this.selectedPriceRange,
+        this.customMinPrice, this.customMaxPrice, this.costBasis, this.modelsViewMode,
+      ].join('\u0000');
+    },
+
     // Aggregated rows for the models tab, sorted by intelligence score descending.
-    get rankedModelsByIntelligence() {
+    get rankedModelsByIntelligence() { return this.cachedModelRows; },
+
+    filterModelRows() {
       const q = this.search.trim().toLowerCase();
-      const prov = this.selectedModelProvider;
+      const prov = this.selectedModelProvider.toLowerCase();
       const rangeId = this.selectedPriceRange;
-      const rows = this.cachedAllAggregatedRows || [];
 
       let minPrice = 0;
       let maxPrice = Infinity;
-
       if (rangeId === 'custom') {
         const minVal = parseFloat(this.customMinPrice);
         const maxVal = parseFloat(this.customMaxPrice);
@@ -349,10 +360,10 @@ export function bench() {
         }
       }
 
-      return rows
+      return (this.cachedAllAggregatedRows || [])
         .filter((r) => {
           const m = r.model;
-          if (prov !== 'all' && m.provider.toLowerCase() !== prov.toLowerCase()) return false;
+          if (prov !== 'all' && m.provider.toLowerCase() !== prov) return false;
           if (q && !m.name.toLowerCase().includes(q) && !m.provider.toLowerCase().includes(q)) return false;
           if (rangeId === 'all') return true;
           const cost = this.getModelCost(m);
@@ -364,7 +375,7 @@ export function bench() {
     },
 
     get paginatedModels() {
-      return this.rankedModelsByIntelligence.slice(0, this.modelsVisibleCount);
+      return this.cachedModelRows.slice(0, this.modelsVisibleCount);
     },
 
     loadMoreModels() {
@@ -372,25 +383,15 @@ export function bench() {
     },
 
     get bestModelInRange() {
-      const rows = this.rankedModelsByIntelligence;
-      return rows.find((r) => r.model.intelligence != null)?.model ?? null;
+      return this.cachedModelRows.find((r) => r.model.intelligence != null)?.model ?? null;
     },
 
-    get modelsPlotHtml() {
-      const models = this.rankedModelsByIntelligence.map((r) => r.model);
-      return renderIntelligenceCostChart(models);
-    },
+    // One chart at a time. Rendering both plot and timeline doubled the dot count
+    // even though only one is ever on screen.
+    get modelsChartHtml() { return this.cachedModelsChart; },
 
-    get modelsTimelineHtml() {
-      const models = this.rankedModelsByIntelligence.map((r) => r.model);
-      return renderIntelligenceTimelineChart(models);
-    },
-
-    // Standings rows: scored rows only, for the leaderboard.
-    get leaderboardRows() { return this.rankedRows.filter((r) => r.n > 0); },
-
-    // Only scored rows, for the charts.
-    get chartRows() { return this.rankedRows.filter((r) => r.n > 0); },
+    // Scored rows only: drives both the standings list and the leaderboard chart.
+    get chartRows() { return this.cachedScoredRows; },
 
     // Filter chips: 'all' plus any category that has prompts.
     get activeCategories() {
@@ -461,16 +462,23 @@ export function bench() {
       const total = this.data.models.length;
       return { done: prompt.runs.length, total };
     },
-    // Self-contained cell colour (own bg + fg) so contrast holds on both themes:
-    // a teal ramp from light (low score) to dark (high score), text flipped by
-    // lightness. Independent of the surrounding light/dark surface.
-    matrixCellStyle(score) {
-      // Blue score-heat: low scores read pale, high scores deepen to vivid blue.
-      const s = Math.max(0, Math.min(100, score));
-      const L = 80 - (s / 100) * 40; // 80% -> 40%
-      const sat = 70 + (s / 100) * 22; // richer as it climbs
-      const fg = L > 58 ? '#0b1020' : '#ffffff';
-      return `background: hsl(214 ${sat}% ${L}%); color: ${fg}; border:1px solid rgba(255,255,255,.28)`;
+
+    // Built as one HTML string only while open: binding every cell individually
+    // cost ~1.6s for a few hundred models.
+    get coverageGridHtml() {
+      if (!this.showMatrix) return '';
+      return renderCoverageGrid(this.filteredPrompts, this.data.models);
+    },
+
+    // One delegated handler for the whole grid.
+    onGridClick(event) {
+      const cell = event.target.closest('[data-m]');
+      if (!cell) return;
+      const prompt = this.data.prompts.find((p) => p.id === cell.dataset.p);
+      if (!prompt) return;
+      const run = prompt.runsMap[cell.dataset.m];
+      if (run) this.openEditRun(prompt.id, run);
+      else this.openAddRun(prompt.id, cell.dataset.m);
     },
 
     // ---------------------------------------------------------------- charts
@@ -701,9 +709,7 @@ export function bench() {
     // ---------------------------------------------------------------- import / export
     exportJson() {
       const stamp = new Date().toISOString().slice(0, 10);
-      const cleanPrompts = this.data.prompts.map(({ runsMap, ...p }) => p);
-      const cleanData = { ...this.data, prompts: cleanPrompts };
-      const blob = new Blob([JSON.stringify(cleanData, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify(this.serialisable(), null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -774,20 +780,31 @@ export function bench() {
       this.cachedAllAggregatedRows = aggregate(this.data, 'all');
       const aggregated = this.category === 'all' ? this.cachedAllAggregatedRows : aggregate(this.data, this.category);
       this.cachedRankedRows = rank(aggregated, this.sortMode);
+      this.cachedScoredRows = this.cachedRankedRows.filter((r) => r.n > 0);
       const globalMean = aggregated.globalMean;
-      this.cachedGlobalMean = globalMean;
-
       const promptAvgs = {};
       for (const p of this.data.prompts) {
         if (!p.runs.length) {
           promptAvgs[p.id] = null;
         } else {
-          const n = p.runs.length;
           const sum = p.runs.reduce((s, r) => s + r.score, 0);
-          promptAvgs[p.id] = (SHRINKAGE_C * globalMean + n * (sum / n)) / (SHRINKAGE_C + n);
+          promptAvgs[p.id] = (SHRINKAGE_C * globalMean + sum) / (SHRINKAGE_C + p.runs.length);
         }
       }
       this.cachedPromptAvgs = promptAvgs;
+
+      this.updateModelRows();
+    },
+
+    updateModelRows() {
+      this.cachedModelRows = this.filterModelRows();
+      this.modelsVisibleCount = 50;
+      const models = this.cachedModelRows.map((r) => r.model);
+      this.cachedModelsChart = this.modelsViewMode === 'timeline'
+        ? renderIntelligenceTimelineChart(models)
+        : this.modelsViewMode === 'plot'
+          ? renderIntelligenceCostChart(models)
+          : '';
     },
 
     notify(kind, msg, undo = null) {
@@ -817,11 +834,6 @@ export function bench() {
       localStorage.setItem('bench-theme', this.dark ? 'dark' : 'light');
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', this.dark ? '#060814' : '#e9edf7');
-    },
-
-    toggleBodyScroll() {
-      const open = this.confirm.open;
-      document.body.classList.toggle('overflow-hidden', open);
     },
   };
 }

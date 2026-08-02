@@ -40,7 +40,15 @@ test('bench store price filtering for free models', () => {
   };
 
   store.applyData(rawData);
+
+  // The models tab is served from a cache that init() refreshes via a $watch on
+  // modelFilterKey. There is no Alpine here, so assert the key actually covers
+  // this filter, then run the recompute the watcher would have run.
+  const before = store.modelFilterKey;
   store.selectedPriceRange = 'free';
+  expect(store.modelFilterKey).not.toBe(before);
+  store.updateModelRows();
+
   const freeModels = store.rankedModelsByIntelligence;
   expect(freeModels.length).toBe(1);
   expect(freeModels[0].model.id).toBe('free-m');

@@ -1,15 +1,19 @@
 import { describe, expect, test } from 'bun:test';
 import { renderIntelligenceCostChart, renderIntelligenceTimelineChart } from '../src/charts/svgCharts.js';
 
+// Pull the dot label out of each rendered tooltip, in render order.
+const titles = (html) => [...html.matchAll(/<b>([^<]*)<\/b>/g)].map((m) => m[1]);
+// Names of the dots flagged as frontier / SOTA members.
+const leads = (html) => [...html.matchAll(/plot-dot--lead"[\s\S]*?<b>([^<(]*)/g)].map((m) => m[1].trim());
+
 describe('renderIntelligenceCostChart', () => {
   test('returns fallback message when model array is empty or lacks intelligence index', () => {
-    const html1 = renderIntelligenceCostChart([]);
-    expect(html1).toContain('No models match your search query');
+    expect(renderIntelligenceCostChart([])).toContain('none have intelligence data');
 
-    const html2 = renderIntelligenceCostChart([
+    const html = renderIntelligenceCostChart([
       { id: 'm1', name: 'Model 1', provider: 'OpenAI', intelligence: null, price1mInput: 1.0, price1mOutput: 2.0 }
     ]);
-    expect(html2).toContain('No models match your search query');
+    expect(html).toContain('none have intelligence data');
   });
 
   test('renders chart html with pareto efficiency frontier line for models with intelligence index', () => {
@@ -24,23 +28,33 @@ describe('renderIntelligenceCostChart', () => {
     expect(html).toContain('Intelligence Index');
     expect(html).toContain('Cost per 1M tokens ($, log scale)');
     expect(html).toContain('Efficiency frontier');
-    expect(html).toContain('Model A');
-    expect(html).toContain('Model B');
-    expect(html).toContain('Model C');
-    expect(html).toContain('Model D');
     expect(html).toContain('Unpriced');
+    for (const name of ['Model A', 'Model B', 'Model C', 'Model D']) {
+      expect(html).toContain(name);
+    }
+  });
+
+  // The frontier sweep replaced an O(n^2) pairwise scan; this pins its result.
+  test('frontier keeps only non-dominated models', () => {
+    const models = [
+      { id: 'cheap', name: 'Cheap', provider: 'OpenAI', intelligence: 60, price1mInput: 1, price1mOutput: 1 },
+      { id: 'mid', name: 'Mid', provider: 'Google', intelligence: 55, price1mInput: 4, price1mOutput: 4 }, // dominated by Cheap
+      { id: 'smart', name: 'Smart', provider: 'Anthropic', intelligence: 90, price1mInput: 9, price1mOutput: 9 },
+      { id: 'waste', name: 'Waste', provider: 'Meta', intelligence: 70, price1mInput: 20, price1mOutput: 20 }, // dominated by Smart
+    ];
+
+    expect(leads(renderIntelligenceCostChart(models)).sort()).toEqual(['Cheap', 'Smart']);
   });
 });
 
 describe('renderIntelligenceTimelineChart', () => {
   test('returns fallback message when model array is empty or lacks release dates', () => {
-    const html1 = renderIntelligenceTimelineChart([]);
-    expect(html1).toContain('No models match your search query');
+    expect(renderIntelligenceTimelineChart([])).toContain('none have release dates');
 
-    const html2 = renderIntelligenceTimelineChart([
+    const html = renderIntelligenceTimelineChart([
       { id: 'm1', name: 'Model 1', provider: 'OpenAI', intelligence: 80, releasedAt: null }
     ]);
-    expect(html2).toContain('No models match your search query');
+    expect(html).toContain('none have release dates');
   });
 
   test('renders timeline chart html with SOTA progression line for models with intelligence and release dates', () => {
@@ -53,12 +67,24 @@ describe('renderIntelligenceTimelineChart', () => {
 
     const html = renderIntelligenceTimelineChart(models);
     expect(html).toContain('Intelligence Index');
-    expect(html).toContain('Release Date Timeline');
+    expect(html).toContain('Release date');
     expect(html).toContain('SOTA progression');
-    expect(html).toContain('GPT-4');
-    expect(html).toContain('Claude 3 Opus');
-    expect(html).toContain('Gemini 1.5 Pro');
-    expect(html).toContain('Claude 3.5 Sonnet');
+
+    // Dots come out oldest-first, and only each new record counts as SOTA.
+    expect(titles(html)).toEqual([
+      'GPT-4 (OpenAI)',
+      'Gemini 1.5 Pro (Google)',
+      'Claude 3 Opus (Anthropic)',
+      'Claude 3.5 Sonnet (Anthropic)',
+    ]);
+    expect(leads(html)).toEqual(['GPT-4', 'Gemini 1.5 Pro', 'Claude 3 Opus', 'Claude 3.5 Sonnet']);
+  });
+
+  test('tolerates year-only and year-month release dates', () => {
+    const models = [
+      { id: 'a', name: 'Old', provider: 'OpenAI', intelligence: 40, releasedAt: '2023' },
+      { id: 'b', name: 'Newer', provider: 'Google', intelligence: 60, releasedAt: '2024-06' },
+    ];
+    expect(titles(renderIntelligenceTimelineChart(models))).toEqual(['Old (OpenAI)', 'Newer (Google)']);
   });
 });
-

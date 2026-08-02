@@ -20,7 +20,7 @@ Astro + Tailwind CSS v4 + Alpine.js, deployed on Cloudflare Pages with Pages Fun
 │   ├── api/
 │   │   └── client.js          # client network fetch layer
 │   ├── charts/
-│   │   └── svgCharts.js       # SVG/DOM bar & scatter renderers
+│   │   └── svgCharts.js       # bar/scatter/timeline + coverage-grid HTML renderers
 │   └── utils/
 │       ├── config.js          # categories, limits, & weights
 │       ├── ranking.js         # leaderboard ranking math
@@ -164,5 +164,13 @@ Server-side validation clamps scores to 0-100, requires non-negative times, requ
 
 - Single-user by design. The version guard prevents cross-device clobbering but is not a locking or merge system.
 - Cloudflare KV is eventually consistent (up to ~60s across locations); a second device may briefly read stale data after a write.
-- `x-html` is used only for chart SVG/HTML rendering. All other user text uses `x-text`.
+- `x-html` is used only for the charts and the coverage grid, whose contents are
+  built as HTML strings in `svgCharts.js` (every value escaped there). All other
+  user text uses `x-text`. These views are too dense to bind element-by-element:
+  with a few hundred synced models, per-cell Alpine bindings cost seconds.
+- Anything derived from the full model list (ranked rows, filtered model rows,
+  chart markup) is cached in `appStore.js` and recomputed by an explicit
+  `$watch`, not exposed as a plain getter. Alpine re-evaluates a getter for every
+  binding that reads it, so a getter that walks 400 models runs many times per
+  interaction.
 - If you previously used a hardcoded or env-level AA key that may have been exposed, rotate it in the Artificial Analysis dashboard.

@@ -105,7 +105,7 @@
 
         <div class="space-y-2.5 mt-3">
           <template x-for="(row, idx) in paginatedModels" :key="row.model.id">
-            <div class="glass-soft performance-card rounded-2xl px-4 py-3 flex items-center justify-between gap-3 min-w-0">
+            <div class="glass-soft rounded-2xl px-4 py-3 flex items-center justify-between gap-3 min-w-0">
               <!-- Left: Rank + Model info -->
               <div class="flex items-center gap-3 min-w-0 grow">
                 <!-- Fancy number label: big, bold, beautiful, colored with provider brand color -->
@@ -161,14 +161,9 @@
         </div>
       </div>
 
-      <!-- Plot view -->
-      <div x-show="modelsViewMode === 'plot'" class="glass rounded-card p-3 sm:p-5 mt-3 overflow-hidden">
-        <div class="relative w-full overflow-x-auto scroll-slim pb-2" x-html="modelsPlotHtml"></div>
-      </div>
-
-      <!-- Timeline view -->
-      <div x-show="modelsViewMode === 'timeline'" class="glass rounded-card p-3 sm:p-5 mt-3 overflow-hidden">
-        <div class="relative w-full overflow-x-auto scroll-slim pb-2" x-html="modelsTimelineHtml"></div>
+      <!-- Plot / timeline view. Only the active one is ever built. -->
+      <div x-show="modelsViewMode !== 'list'" class="glass rounded-card p-3 sm:p-5 mt-3 overflow-hidden">
+        <div class="relative w-full overflow-x-auto scroll-slim pb-2" x-html="modelsChartHtml"></div>
       </div>
 
       <!-- Bottom Right Timestamp -->
