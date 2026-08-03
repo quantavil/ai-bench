@@ -37,9 +37,9 @@ export const LOW_CONFIDENCE_N = 3;
 // Bayesian shrinkage pseudocount used by the 'adjusted' sort.
 export const SHRINKAGE_C = 5;
 
-// Price range presets for model filtering.
+// Price range presets for model filtering. Multi-select: selecting none means
+// no price filter, so there is no explicit 'all' entry.
 export const PRICE_RANGES = [
-  { id: 'all', label: 'All Prices', min: 0, max: Infinity },
   { id: 'free', label: 'Free / Unpriced ($0.00)', min: 0, max: 0 },
   { id: 'ultra-budget', label: 'Ultra Budget ($0.01 – $0.25)', min: 0.01, max: 0.25 },
   { id: 'low-budget', label: 'Low Budget ($0.25 – $0.50)', min: 0.25, max: 0.50 },

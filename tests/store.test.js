@@ -45,11 +45,21 @@ test('bench store price filtering for free models', () => {
   // modelFilterKey. There is no Alpine here, so assert the key actually covers
   // this filter, then run the recompute the watcher would have run.
   const before = store.modelFilterKey;
-  store.selectedPriceRange = 'free';
+  store.selectedPriceRanges = ['free'];
   expect(store.modelFilterKey).not.toBe(before);
   store.updateModelRows();
 
   const freeModels = store.rankedModelsByIntelligence;
   expect(freeModels.length).toBe(1);
   expect(freeModels[0].model.id).toBe('free-m');
+
+  // Multi-select: selected ranges union, selecting none means no price filter.
+  store.selectedPriceRanges = ['free', 'upper-mid'];
+  store.updateModelRows();
+  expect(store.rankedModelsByIntelligence.length).toBe(2);
+
+  store.selectedPriceRanges = [];
+  store.selectedModelProviders = ['CloudProvider'];
+  store.updateModelRows();
+  expect(store.rankedModelsByIntelligence.map((r) => r.model.id)).toEqual(['paid-m']);
 });

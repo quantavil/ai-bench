@@ -287,6 +287,69 @@ select option {
   color: var(--strong);
 }
 
+/* Multi-select filter dropdown: a <details> so open/close needs no JS. */
+.multi-dd {
+  position: relative;
+}
+
+.multi-dd > summary {
+  display: flex;
+  align-items: center;
+  gap: .375rem;
+  max-width: 11rem;
+  padding: .2rem .5rem;
+  border-radius: .375rem;
+  border: 1px solid var(--glass-brd-soft);
+  background: var(--field-bg);
+  color: var(--strong);
+  font-size: .75rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.multi-dd > summary::-webkit-details-marker {
+  display: none;
+}
+
+.multi-dd[open] > summary svg:last-child {
+  transform: rotate(180deg);
+}
+
+.multi-dd-panel {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  margin-top: .375rem;
+  min-width: 13rem;
+  max-height: 15rem;
+  overflow-y: auto;
+  padding: .25rem;
+  border-radius: .75rem;
+  background: var(--panel);
+  border: 1px solid var(--hair);
+  box-shadow: 0 16px 32px -12px rgba(0, 0, 0, .3);
+}
+
+.multi-dd-panel label {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .375rem .5rem;
+  border-radius: .5rem;
+  font-size: .75rem;
+  color: var(--strong);
+  cursor: pointer;
+}
+
+.multi-dd-panel label:hover {
+  background: color-mix(in srgb, var(--strong) 6%, transparent);
+}
+
+.multi-dd-panel input {
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+
 /* Chips + segmented control */
 .chip {
   background: var(--chip-bg);
@@ -576,6 +639,15 @@ input[type="number"] {
   height: 340px;
   display: flex;
   flex-direction: column;
+}
+
+/* Below this the axes and dots collide, so hold a floor width and let the
+   wrapper's overflow-x-auto scroll it instead of squeezing. */
+@media (max-width: 640px) {
+  .plot,
+  .bars {
+    min-width: 560px;
+  }
 }
 
 /* Right padding clears the last vertical gridline label, which is centred on

@@ -78,8 +78,9 @@ export function bench() {
     chartMode: 'bar',
     modelsViewMode: 'list',
     modelsVisibleCount: 50,
-    selectedModelProvider: 'all',
-    selectedPriceRange: 'all',
+    // Multi-select filters. Empty means "no filter", not "nothing selected".
+    selectedModelProviders: [],
+    selectedPriceRanges: [],
     customMinPrice: '',
     customMaxPrice: '',
     costBasis: 'blended',
@@ -313,7 +314,7 @@ export function bench() {
       (this.data?.models || []).forEach((m) => {
         if (m.provider) set.add(m.provider);
       });
-      return ['all', ...Array.from(set).sort()];
+      return Array.from(set).sort();
     },
 
     getModelCost(m) {
@@ -332,7 +333,7 @@ export function bench() {
     // any new filter must be listed here or the list will not refresh.
     get modelFilterKey() {
       return [
-        this.search, this.selectedModelProvider, this.selectedPriceRange,
+        this.search, this.selectedModelProviders.join(','), this.selectedPriceRanges.join(','),
         this.customMinPrice, this.customMaxPrice, this.costBasis, this.modelsViewMode,
       ].join('\u0000');
     },
@@ -342,34 +343,26 @@ export function bench() {
 
     filterModelRows() {
       const q = this.search.trim().toLowerCase();
-      const prov = this.selectedModelProvider.toLowerCase();
-      const rangeId = this.selectedPriceRange;
+      const provs = new Set(this.selectedModelProviders.map((p) => p.toLowerCase()));
 
-      let minPrice = 0;
-      let maxPrice = Infinity;
-      if (rangeId === 'custom') {
+      // Each selected range is one [min,max] window; a model passes if it lands in
+      // any of them. Unpriced models only pass when 'free' is among them.
+      const windows = this.selectedPriceRanges.map((id) => {
+        if (id !== 'custom') return PRICE_RANGES.find((p) => p.id === id);
         const minVal = parseFloat(this.customMinPrice);
         const maxVal = parseFloat(this.customMaxPrice);
-        minPrice = !isNaN(minVal) ? minVal : 0;
-        maxPrice = !isNaN(maxVal) ? maxVal : Infinity;
-      } else {
-        const preset = PRICE_RANGES.find((p) => p.id === rangeId);
-        if (preset) {
-          minPrice = preset.min;
-          maxPrice = preset.max;
-        }
-      }
+        return { id, min: !isNaN(minVal) ? minVal : 0, max: !isNaN(maxVal) ? maxVal : Infinity };
+      }).filter(Boolean);
 
       return (this.cachedAllAggregatedRows || [])
         .filter((r) => {
           const m = r.model;
-          if (prov !== 'all' && m.provider.toLowerCase() !== prov) return false;
+          if (provs.size && !provs.has(m.provider.toLowerCase())) return false;
           if (q && !m.name.toLowerCase().includes(q) && !m.provider.toLowerCase().includes(q)) return false;
-          if (rangeId === 'all') return true;
+          if (!windows.length) return true;
           const cost = this.getModelCost(m);
-          if (cost === null) return rangeId === 'free';
-          if (rangeId === 'free') return cost === 0;
-          return cost >= minPrice && cost <= maxPrice;
+          if (cost === null) return windows.some((w) => w.id === 'free');
+          return windows.some((w) => cost >= w.min && cost <= w.max);
         })
         .sort((a, b) => (b.model.intelligence ?? -1) - (a.model.intelligence ?? -1));
     },
